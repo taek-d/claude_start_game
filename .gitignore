@@ -41,3 +41,7 @@ notionimg/
 
 # Test results
 test-results/
+
+# Dev screenshots & progress logs
+output/
+progress.md
