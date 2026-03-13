@@ -128,26 +128,28 @@ export default function VNScene({
 
   const dialogue = getDialogueToShow()
 
+  const normalizeCharacters = useCallback((chars = []) => (
+    chars.map((char) => ({
+      ...char,
+      position: 'center',
+    }))
+  ), [])
+
   const renderedChars = useMemo(() => {
-    if (!dialogue) return effectiveChars
+    if (!dialogue) return normalizeCharacters(effectiveChars)
     const speakerId = dialogue.speaker
     if (!speakerId || speakerId === 'narrator' || speakerId === 'player') {
-      return effectiveChars
+      return normalizeCharacters(effectiveChars)
     }
     if (effectiveChars.some((char) => char.id === speakerId)) {
-      return effectiveChars
+      return normalizeCharacters(effectiveChars)
     }
 
-    const existing = effectiveChars.length
-    const autoPosition =
-      existing === 0
-        ? 'right'
-        : existing === 1
-          ? (effectiveChars[0].position === 'right' ? 'left' : 'right')
-          : 'center'
-
-    return [...effectiveChars, { id: speakerId, position: autoPosition }]
-  }, [dialogue, effectiveChars])
+    return [
+      ...normalizeCharacters(effectiveChars),
+      { id: speakerId, position: 'center' },
+    ]
+  }, [dialogue, effectiveChars, normalizeCharacters])
 
   if (!dialogue && !showChoices) return null
 

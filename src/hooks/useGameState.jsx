@@ -1,71 +1,155 @@
 import { createContext, useContext, useReducer, useEffect, useRef, useCallback, useState } from 'react'
 import { checkTitleUnlocks } from '../data/titles'
-import { getLevelTitles, getMaxChapter } from '../data/roleRegistry'
+import { getChapterMeta, getLevelTitles, getMaxChapter } from '../data/roleRegistry'
+import { REALITY_CHECK_META, evaluateBridgeResponse } from '../data/roles/pm/questSupport'
 import { supabase } from '../lib/supabase'
 
 const GameContext = createContext(null)
 const GameDispatchContext = createContext(null)
 
-const STORAGE_KEY = 'job-quest-save'
-const FORCE_NEW_GAME_KEY = 'job-quest-force-new-game'
+const CAMPAIGN_VERSION = 'cc101-quest-v4'
+const STORAGE_KEY = 'cc101-quest-save-v4'
+const FORCE_NEW_GAME_KEY = 'cc101-quest-force-new-game-v4'
 const SAVE_DEBOUNCE_MS = 2000
 
 const XP_TABLE = [0, 80, 200, 400, 700, 1100, 1600, 2200, 3000, 4000]
+const SKILL_KEYS = ['toolSense', 'promptCraft', 'recovery', 'workflow']
+
+const defaultStats = {
+  toolSense: 12,
+  promptCraft: 10,
+  recovery: 10,
+  workflow: 10,
+}
+
+const defaultMastery = {
+  toolSense: 0,
+  promptCraft: 0,
+  recovery: 0,
+  workflow: 0,
+}
 
 const initialState = {
+  campaignVersion: CAMPAIGN_VERSION,
   phase: 'title',
-  // title → setup → chapter_select → playing → chapter_clear → game_over
   playerName: '',
-  playerGender: 'male',
-  playerRole: null,
+  playerGender: 'female',
+  playerRole: 'pm',
   currentChapter: 1,
   maxUnlockedChapter: 1,
   chapterPhase: 'opening',
-  // opening → briefing → problems → boss → clear → event
   currentProblemIndex: 0,
+  storyIndex: 0,
+  bossIntroShown: false,
   xp: 0,
   level: 1,
   levelAtChapterStart: 1,
-  affection: 30,
+  confidence: 35,
   solvedProblems: [],
   correctCount: 0,
   incorrectCount: 0,
-  currentTitle: null,
+  currentTitle: '작업실 견습생',
   unlockedTitles: [],
   pendingTitleUnlock: [],
   chapterStars: {},
+  chapterPassStatus: {},
   hints: 5,
   hintUsedThisChapter: false,
   chapterCorrect: 0,
   chapterTotal: 0,
+  chapterMistakes: 0,
   chapterAttemptedProblems: [],
   chapterProblemResults: {},
   isReplayChapterRun: false,
   attemptCount: 0,
-  consecutiveCorrect: 0,
-  maxConsecutiveCorrect: 0,
+  beginnerMode: false,
+  coachModeAlwaysOn: false,
+  coachMode: false,
+  coachHelpUsed: false,
   hintFreeChapters: 0,
-  hadPerfectChapter: false,
-  cgSeen: [],
-  storyIndex: 0,
-  bossIntroShown: false,
-  stats: {
-    communication: 10,
-    analysis: 10,
-    product: 10,
-    execution: 10
-  },
+  artifactUnlocks: [],
+  lastUnlockedArtifact: null,
+  masteryBySkill: { ...defaultMastery },
+  stats: { ...defaultStats },
+  bridgeChoices: {},
+  bridgeResponses: {},
+  bridgeRubricResults: {},
+  bridgeTaskCount: 0,
+  realityChecks: {},
+  hintUsageByProblem: {},
+  misconceptionLog: {},
+  completionSummary: null,
+}
+
+function getDefaultLevelTitle(role = 'pm') {
+  const titles = getLevelTitles(role)
+  return titles[0] || '작업실 견습생'
+}
+
+function createFreshState(role = 'pm') {
+  return {
+    ...initialState,
+    playerRole: role,
+    currentTitle: getDefaultLevelTitle(role),
+    stats: { ...defaultStats },
+    masteryBySkill: { ...defaultMastery },
+  }
+}
+
+function resetChapterRun(state, chapterId, isReplayChapterRun = false) {
+  return {
+    ...state,
+    phase: 'playing',
+    currentChapter: chapterId,
+    levelAtChapterStart: state.level,
+    chapterPhase: 'opening',
+    currentProblemIndex: 0,
+    storyIndex: 0,
+    hintUsedThisChapter: false,
+    chapterCorrect: 0,
+    chapterTotal: 0,
+    chapterMistakes: 0,
+    chapterAttemptedProblems: [],
+    chapterProblemResults: {},
+    isReplayChapterRun,
+    attemptCount: 0,
+    coachMode: state.coachModeAlwaysOn,
+    bossIntroShown: false,
+    pendingTitleUnlock: [],
+    lastUnlockedArtifact: null,
+  }
+}
+
+function mergeState(payload) {
+  const role = payload?.playerRole || 'pm'
+  const base = createFreshState(role)
+  const beginnerMode = Boolean(payload?.beginnerMode)
+  const coachModeAlwaysOn = Boolean(payload?.coachModeAlwaysOn || beginnerMode)
+  return {
+    ...base,
+    ...payload,
+    campaignVersion: CAMPAIGN_VERSION,
+    stats: { ...defaultStats, ...(payload?.stats || {}) },
+    masteryBySkill: { ...defaultMastery, ...(payload?.masteryBySkill || {}) },
+    beginnerMode,
+    coachModeAlwaysOn,
+    coachMode: coachModeAlwaysOn || Boolean(payload?.coachMode),
+    coachHelpUsed: coachModeAlwaysOn || Boolean(payload?.coachHelpUsed),
+    bridgeRubricResults: payload?.bridgeRubricResults || {},
+    realityChecks: payload?.realityChecks || {},
+    currentTitle: payload?.currentTitle || getLevelTitle(payload?.level || 1, role),
+  }
 }
 
 export function getLevelFromXP(xp) {
-  for (let i = XP_TABLE.length - 1; i >= 0; i--) {
+  for (let i = XP_TABLE.length - 1; i >= 0; i -= 1) {
     if (xp >= XP_TABLE[i]) return i + 1
   }
   return 1
 }
 
 export function getXPForLevel(level) {
-  return XP_TABLE[Math.min(level - 1, XP_TABLE.length - 1)]
+  return XP_TABLE[Math.min(Math.max(level - 1, 0), XP_TABLE.length - 1)]
 }
 
 export function getXPForNextLevel(level) {
@@ -75,24 +159,23 @@ export function getXPForNextLevel(level) {
 
 export function getLevelTitle(level, role = 'pm') {
   const titles = getLevelTitles(role)
-  if (!titles || titles.length === 0) return ''
+  if (!titles.length) return ''
   return titles[Math.min(level - 1, titles.length - 1)]
 }
 
-export function getAffectionStage(affection) {
-  if (affection >= 81) return 5
-  if (affection >= 61) return 4
-  if (affection >= 41) return 3
-  if (affection >= 21) return 2
+export function getAffectionStage(confidence) {
+  if (confidence >= 85) return 5
+  if (confidence >= 65) return 4
+  if (confidence >= 45) return 3
+  if (confidence >= 25) return 2
   return 1
 }
 
 export function getTrustLabel(stage) {
-  const labels = ['', '관심', '신뢰', '존경', '멘토', '파트너']
+  const labels = ['', '긴장', '워밍업', '할 수 있겠다', '이제 된다', '실전 ready']
   return labels[stage] || ''
 }
 
-// 하위호환: getAffectionLabel → getTrustLabel 래핑
 export function getAffectionLabel(stage) {
   return getTrustLabel(stage)
 }
@@ -103,201 +186,306 @@ function getProblemIdFromPayload(payload) {
   return null
 }
 
-function getXPRewardFromPayload(payload, fallback) {
-  if (payload && typeof payload === 'object' && Number.isFinite(payload.xpReward)) {
-    return payload.xpReward
-  }
-  return fallback
-}
-
-function getStatsRewardFromPayload(payload) {
-  if (payload && typeof payload === 'object' && payload.statsReward) {
-    return payload.statsReward
-  }
-  return null
-}
-
 function buildChapterProgress(state, problemId, isCorrect) {
-  const hasProblemId = typeof problemId === 'string' && problemId.length > 0
-  const isFirstAttempt = hasProblemId
-    ? !state.chapterAttemptedProblems.includes(problemId)
-    : true
-  const wasPreviouslyCorrect = hasProblemId
-    ? Boolean(state.chapterProblemResults[problemId])
-    : false
-
-  const nextAttempted = hasProblemId && isFirstAttempt
+  const nextAttempted = problemId && !state.chapterAttemptedProblems.includes(problemId)
     ? [...state.chapterAttemptedProblems, problemId]
     : state.chapterAttemptedProblems
 
-  const nextResults = hasProblemId
+  const nextResults = problemId
     ? { ...state.chapterProblemResults, [problemId]: isCorrect }
     : state.chapterProblemResults
 
-  const chapterCorrect = Object.values(nextResults).filter(Boolean).length
-  const chapterTotal = Object.keys(nextResults).length
-
   return {
-    isFirstAttempt,
-    wasPreviouslyCorrect,
     nextAttempted,
     nextResults,
-    chapterCorrect,
-    chapterTotal,
+    chapterCorrect: Object.values(nextResults).filter(Boolean).length,
+    chapterTotal: Object.keys(nextResults).length,
+    wasCorrectBefore: problemId ? Boolean(state.chapterProblemResults[problemId]) : false,
   }
 }
 
-function _getMaxChapterForState(state) {
-  return getMaxChapter(state.playerRole || 'pm') || 8
+function applyStatsReward(stats, statsReward) {
+  const next = { ...stats }
+  if (!statsReward) return next
+  Object.entries(statsReward).forEach(([key, value]) => {
+    if (typeof next[key] === 'number') {
+      next[key] = Math.max(0, next[key] + value)
+    }
+  })
+  return next
 }
 
-function _getLevelTitleForState(level, state) {
-  return getLevelTitle(level, state.playerRole || 'pm')
+function addMastery(state, masteryKey) {
+  if (!masteryKey || !SKILL_KEYS.includes(masteryKey)) return state.masteryBySkill
+  return {
+    ...state.masteryBySkill,
+    [masteryKey]: (state.masteryBySkill[masteryKey] || 0) + 1,
+  }
+}
+
+function incrementCountMap(map, key) {
+  if (!key) return map
+  return {
+    ...map,
+    [key]: (map[key] || 0) + 1,
+  }
+}
+
+function buildCompletionSummary(state) {
+  const weakness = [...SKILL_KEYS]
+    .map((key) => ({ key, value: state.masteryBySkill[key] || 0 }))
+    .sort((a, b) => a.value - b.value)
+    .map((entry) => entry.key)
+
+  const realityQuestIds = Object.keys(REALITY_CHECK_META).map(Number)
+  const completedRealityChecks = realityQuestIds.filter((questId) => state.realityChecks?.[questId]?.completed)
+  const bridgeEntries = Object.entries(state.bridgeRubricResults || {})
+    .filter(([, result]) => result && !result.skipped)
+  const bridgeQuestIds = bridgeEntries.map(([questId]) => questId)
+  const readyBridgeQuestIds = bridgeEntries
+    .filter(([, result]) => result?.passed)
+    .map(([questId]) => questId)
+  const pendingRealityQuestIds = realityQuestIds.filter((questId) => !state.realityChecks?.[questId]?.completed)
+  const bridgeNeedsWorkIds = bridgeEntries
+    .filter(([, result]) => !result?.passed)
+    .map(([questId]) => Number(questId))
+
+  let readinessLevel = 'warming_up'
+  if (completedRealityChecks.length >= realityQuestIds.length && readyBridgeQuestIds.length >= 6) readinessLevel = 'ready_to_launch'
+  else if (completedRealityChecks.length >= 3 && readyBridgeQuestIds.length >= 4) readinessLevel = 'solid_progress'
+
+  return {
+    clearedChapters: Object.values(state.chapterPassStatus || {}).filter(Boolean).length,
+    artifactCount: state.artifactUnlocks.length,
+    bridgeTaskCount: state.bridgeTaskCount,
+    bridgeReadyCount: readyBridgeQuestIds.length,
+    totalBridgeEvaluated: bridgeQuestIds.length,
+    realityCheckCount: completedRealityChecks.length,
+    totalRealityChecks: realityQuestIds.length,
+    pendingRealityQuestIds,
+    bridgeNeedsWorkIds,
+    readinessLevel,
+    weakestSkills: weakness.slice(0, 2),
+  }
 }
 
 function gameReducer(state, action) {
   switch (action.type) {
     case 'START_NEW_GAME': {
-      const role = action.payload.role || 'pm'
-      const firstTitle = _getLevelTitleForState(1, { playerRole: role })
+      const role = action.payload?.role || 'pm'
+      const beginnerMode = Boolean(action.payload?.beginnerMode)
+      const coachModeAlwaysOn = Boolean(action.payload?.coachModeAlwaysOn || beginnerMode)
       return {
-        ...initialState,
+        ...createFreshState(role),
         phase: 'chapter_select',
-        playerName: action.payload.name,
-        playerGender: action.payload.gender,
-        playerRole: role,
-        currentTitle: firstTitle,
-        unlockedTitles: [firstTitle],
+        playerName: action.payload?.name || '',
+        playerGender: action.payload?.gender || 'female',
+        beginnerMode,
+        coachModeAlwaysOn,
+        coachMode: coachModeAlwaysOn,
+        coachHelpUsed: coachModeAlwaysOn,
       }
     }
 
-    case 'LOAD_GAME':
-      return { ...initialState, ...action.payload }
+    case 'LOAD_GAME': {
+      if (!action.payload || action.payload.campaignVersion !== CAMPAIGN_VERSION) {
+        return createFreshState(action.payload?.playerRole || 'pm')
+      }
+      return mergeState(action.payload)
+    }
 
     case 'ANSWER_CORRECT': {
-      const problemId = getProblemIdFromPayload(action.payload)
+      const payload = action.payload || {}
+      const problemId = getProblemIdFromPayload(payload)
       const progress = buildChapterProgress(state, problemId, true)
+      const rewards = payload.rewards || {}
+      const shouldReward = !progress.wasCorrectBefore && !state.isReplayChapterRun
+      const xpGain = shouldReward ? (rewards.xpReward || 8) + (!state.hintUsedThisChapter ? 2 : 0) : 0
+      const newXP = state.xp + xpGain
+      const newLevel = getLevelFromXP(newXP)
       const solvedProblems = problemId && !state.solvedProblems.includes(problemId)
         ? [...state.solvedProblems, problemId]
         : state.solvedProblems
-      const nextCorrectCount = progress.wasPreviouslyCorrect
-        ? state.correctCount
-        : state.correctCount + 1
 
-      const baseState = {
+      return {
         ...state,
-        correctCount: nextCorrectCount,
+        xp: newXP,
+        level: newLevel,
+        confidence: shouldReward
+          ? Math.min(100, state.confidence + (rewards.confidenceChange || 3))
+          : state.confidence,
+        currentTitle: getLevelTitle(newLevel, state.playerRole || 'pm'),
+        solvedProblems,
+        correctCount: progress.wasCorrectBefore ? state.correctCount : state.correctCount + 1,
         chapterCorrect: progress.chapterCorrect,
         chapterTotal: progress.chapterTotal,
         chapterAttemptedProblems: progress.nextAttempted,
         chapterProblemResults: progress.nextResults,
         attemptCount: 0,
-        solvedProblems,
-        currentTitle: state.currentTitle,
-      }
-
-      // Retry clear is allowed, but retry attempts should not grant XP or streak bonuses.
-      // Also, replaying an already-cleared chapter should not change XP/affection.
-      if (!progress.isFirstAttempt || state.isReplayChapterRun) {
-        return baseState
-      }
-
-      const baseXP = getXPRewardFromPayload(action.payload, 8)
-      const bonusXP = !state.hintUsedThisChapter ? 3 : 0
-      const totalXP = baseXP + bonusXP
-      const newXP = state.xp + totalXP
-      const newLevel = getLevelFromXP(newXP)
-      const newConsecutive = state.consecutiveCorrect + 1
-      const newMaxConsecutive = Math.max(state.maxConsecutiveCorrect || 0, newConsecutive)
-      let affectionBonus = 1
-      if (newConsecutive >= 3 && newConsecutive % 3 === 0) affectionBonus += 3
-      const newAffection = Math.min(100, state.affection + affectionBonus)
-      const newTitles = [...state.unlockedTitles]
-      const levelTitle = _getLevelTitleForState(newLevel, state)
-      if (!newTitles.includes(levelTitle)) newTitles.push(levelTitle)
-
-      const statsReward = getStatsRewardFromPayload(action.payload)
-      const newStats = { ...state.stats }
-      if (statsReward) {
-        Object.keys(statsReward).forEach(key => {
-          if (newStats[key] !== undefined) newStats[key] += statsReward[key]
-        })
-      } else {
-        // Default small bump
-        newStats.execution += 1
-      }
-
-      return {
-        ...baseState,
-        xp: newXP,
-        level: newLevel,
-        affection: newAffection,
-        consecutiveCorrect: newConsecutive,
-        maxConsecutiveCorrect: newMaxConsecutive,
-        unlockedTitles: newTitles,
-        stats: newStats,
+        coachMode: state.coachModeAlwaysOn,
+        stats: shouldReward ? applyStatsReward(state.stats, rewards.statsReward) : state.stats,
+        masteryBySkill: shouldReward ? addMastery(state, rewards.masteryKey) : state.masteryBySkill,
       }
     }
 
     case 'ANSWER_INCORRECT': {
-      const problemId = getProblemIdFromPayload(action.payload)
+      const payload = action.payload || {}
+      const problemId = getProblemIdFromPayload(payload)
       const progress = buildChapterProgress(state, problemId, false)
+      const nextAttemptCount = state.attemptCount + 1
+      const nextCoachMode = state.coachModeAlwaysOn || nextAttemptCount >= 2
 
-      const baseState = {
+      return {
         ...state,
+        incorrectCount: state.incorrectCount + 1,
+        confidence: Math.max(0, state.confidence - 1),
         chapterCorrect: progress.chapterCorrect,
         chapterTotal: progress.chapterTotal,
         chapterAttemptedProblems: progress.nextAttempted,
         chapterProblemResults: progress.nextResults,
-        consecutiveCorrect: 0,
-        attemptCount: state.attemptCount + 1,
-      }
-
-      // Retry attempts should not change XP or meta stats.
-      // Also, replaying an already-cleared chapter should not change XP/affection.
-      if (!progress.isFirstAttempt || state.isReplayChapterRun) {
-        return baseState
-      }
-
-      const mistakeXP = getXPRewardFromPayload(action.payload, 1)
-      const newXP = state.xp + mistakeXP
-      const affectionLoss = state.consecutiveCorrect === 0 && state.attemptCount >= 2 ? -2 : -1
-      const newAffection = Math.max(0, state.affection + affectionLoss)
-      return {
-        ...baseState,
-        xp: newXP,
-        affection: newAffection,
-        incorrectCount: state.incorrectCount + 1,
+        chapterMistakes: state.chapterMistakes + 1,
+        attemptCount: nextAttemptCount,
+        coachMode: nextCoachMode,
+        coachHelpUsed: state.coachHelpUsed || nextCoachMode,
+        misconceptionLog: incrementCountMap(state.misconceptionLog, payload.misconceptionTag),
       }
     }
 
     case 'CHOICE_MADE': {
-      const { affectionChange = 0, xpChange = 0, hintChange = 0, statsChange = null } = action.payload
-      const newAffection = Math.max(0, Math.min(100, state.affection + affectionChange))
-      const newXP = Math.max(getXPForLevel(state.level), state.xp + xpChange)
-      const newHints = Math.max(0, state.hints + hintChange)
+      const {
+        confidenceChange = 0,
+        xpChange = 0,
+        hintChange = 0,
+        bridgeChoice = null,
+        bridgeResponseText = '',
+        bridgeRubricResult = null,
+        statsChange = null,
+      } = action.payload || {}
+      const questId = bridgeChoice?.questId
+      const isNewBridge = questId && !state.bridgeChoices[questId]
+      const nextXP = Math.max(0, state.xp + xpChange)
+      const nextLevel = getLevelFromXP(nextXP)
+      return {
+        ...state,
+        confidence: Math.max(0, Math.min(100, state.confidence + confidenceChange)),
+        xp: nextXP,
+        level: nextLevel,
+        currentTitle: getLevelTitle(nextLevel, state.playerRole || 'pm'),
+        hints: Math.max(0, state.hints + hintChange),
+        stats: applyStatsReward(state.stats, statsChange),
+        bridgeChoices: questId
+          ? { ...state.bridgeChoices, [questId]: bridgeChoice.value }
+          : state.bridgeChoices,
+        bridgeResponses: questId
+          ? {
+              ...state.bridgeResponses,
+              [questId]: {
+                choiceValue: bridgeChoice.value,
+                text: bridgeResponseText.trim(),
+              },
+            }
+          : state.bridgeResponses,
+        bridgeRubricResults: questId && bridgeRubricResult
+          ? (
+              bridgeRubricResult.skipped && state.bridgeRubricResults?.[questId]?.passed
+                ? state.bridgeRubricResults
+                : {
+                    ...state.bridgeRubricResults,
+                    [questId]: bridgeRubricResult,
+                  }
+            )
+          : state.bridgeRubricResults,
+        bridgeTaskCount: isNewBridge ? state.bridgeTaskCount + 1 : state.bridgeTaskCount,
+      }
+    }
 
-      const newStats = { ...state.stats }
-      if (statsChange) {
-        Object.keys(statsChange).forEach(key => {
-          if (newStats[key] !== undefined) newStats[key] = Math.max(0, newStats[key] + statsChange[key])
-        })
+    case 'SAVE_REALITY_CHECK': {
+      const { questId, checkedStepIds = [], note = '' } = action.payload || {}
+      if (!questId) return state
+
+      return {
+        ...state,
+        realityChecks: {
+          ...state.realityChecks,
+          [questId]: {
+            checkedStepIds,
+            note: note.trim(),
+            completed: checkedStepIds.length > 0 && note.trim().length > 0,
+          },
+        },
+      }
+    }
+
+    case 'UPDATE_BRIDGE_RESPONSE': {
+      const { questId, text = '' } = action.payload || {}
+      const existing = state.bridgeResponses?.[questId]
+      if (!questId || !existing) return state
+
+      const trimmed = text.trim()
+      const currentResult = state.bridgeRubricResults?.[questId]
+      const nextResult = currentResult?.skipped
+        ? currentResult
+        : evaluateBridgeResponse(Number(questId), trimmed, existing.choiceValue)
+
+      return {
+        ...state,
+        bridgeResponses: {
+          ...state.bridgeResponses,
+          [questId]: {
+            ...existing,
+            text: trimmed,
+          },
+        },
+        bridgeRubricResults: {
+          ...state.bridgeRubricResults,
+          [questId]: nextResult,
+        },
+        completionSummary: buildCompletionSummary({
+          ...state,
+          bridgeResponses: {
+            ...state.bridgeResponses,
+            [questId]: {
+              ...existing,
+              text: trimmed,
+            },
+          },
+          bridgeRubricResults: {
+            ...state.bridgeRubricResults,
+            [questId]: nextResult,
+          },
+        }),
+      }
+    }
+
+    case 'UPDATE_REALITY_NOTE': {
+      const { questId, note = '' } = action.payload || {}
+      const existing = state.realityChecks?.[questId]
+      if (!questId || !existing) return state
+
+      const trimmed = note.trim()
+      const nextRealityChecks = {
+        ...state.realityChecks,
+        [questId]: {
+          ...existing,
+          note: trimmed,
+          completed: existing.checkedStepIds.length > 0 && trimmed.length > 0,
+        },
       }
 
       return {
         ...state,
-        affection: newAffection,
-        xp: newXP,
-        level: getLevelFromXP(newXP),
-        hints: newHints,
-        stats: newStats,
+        realityChecks: nextRealityChecks,
+        completionSummary: buildCompletionSummary({
+          ...state,
+          realityChecks: nextRealityChecks,
+        }),
       }
     }
 
     case 'ADVANCE_CHAPTER_PHASE': {
       const phaseOrder = ['opening', 'briefing', 'problems', 'boss', 'clear', 'event']
-      const currentIdx = phaseOrder.indexOf(state.chapterPhase)
-      const nextPhase = phaseOrder[currentIdx + 1]
+      const currentIndex = phaseOrder.indexOf(state.chapterPhase)
+      const nextPhase = phaseOrder[currentIndex + 1]
       if (!nextPhase) return state
       return {
         ...state,
@@ -305,6 +493,7 @@ function gameReducer(state, action) {
         storyIndex: 0,
         currentProblemIndex: 0,
         attemptCount: 0,
+        coachMode: state.coachModeAlwaysOn,
         bossIntroShown: nextPhase === 'boss' ? false : state.bossIntroShown,
       }
     }
@@ -317,70 +506,71 @@ function gameReducer(state, action) {
         ...state,
         currentProblemIndex: state.currentProblemIndex + 1,
         attemptCount: 0,
+        coachMode: state.coachModeAlwaysOn,
       }
 
-    case 'USE_HINT':
+    case 'USE_HINT': {
       if (state.hints <= 0) return state
-      return { ...state, hints: state.hints - 1, hintUsedThisChapter: true }
+      return {
+        ...state,
+        hints: state.hints - 1,
+        hintUsedThisChapter: true,
+        hintUsageByProblem: incrementCountMap(state.hintUsageByProblem, action.payload?.problemId),
+      }
+    }
 
     case 'SET_STORY_INDEX':
       return { ...state, storyIndex: action.payload }
 
     case 'CHAPTER_COMPLETE': {
-      const accuracy = state.chapterTotal > 0 ? (state.chapterCorrect / state.chapterTotal) : 0
-      const isPerfect = state.chapterTotal > 0 && accuracy === 1 && !state.hintUsedThisChapter
-      const stars = state.chapterCorrect === 0
+      const currentChapter = state.currentChapter
+      const currentStars = state.chapterStars[currentChapter] || 0
+      const stars = state.chapterTotal === 0
         ? 0
-        : accuracy >= 0.75
+        : state.chapterMistakes === 0 && !state.hintUsedThisChapter
           ? 3
-          : accuracy >= 0.5
+          : state.chapterMistakes <= 2
             ? 2
             : 1
-      const maxCh = _getMaxChapterForState(state)
-      const nextUnlock = stars >= 1 ? Math.min(maxCh, state.currentChapter + 1) : (state.maxUnlockedChapter || 1)
-      const newChapterStars = { ...state.chapterStars, [state.currentChapter]: stars }
-      const newHintFreeChapters = !state.hintUsedThisChapter
-        ? (state.hintFreeChapters || 0) + 1
-        : state.hintFreeChapters || 0
-      const newHadPerfect = state.hadPerfectChapter || isPerfect
-
+      const maxChapter = getMaxChapter(state.playerRole || 'pm') || 8
+      const chapterMeta = getChapterMeta(state.playerRole || 'pm').find((chapter) => chapter.id === currentChapter)
+      const artifactId = chapterMeta?.artifactReward
+      const unlockArtifact = stars >= 1 && artifactId && !state.artifactUnlocks.includes(artifactId)
+      const nextUnlock = stars >= 1 ? Math.min(maxChapter, currentChapter + 1) : state.maxUnlockedChapter
       const nextState = {
         ...state,
         phase: 'chapter_clear',
-        maxUnlockedChapter: Math.max(state.maxUnlockedChapter || 1, nextUnlock),
-        chapterStars: newChapterStars,
-        hintFreeChapters: newHintFreeChapters,
-        hadPerfectChapter: newHadPerfect,
+        maxUnlockedChapter: Math.max(state.maxUnlockedChapter, nextUnlock),
+        chapterStars: { ...state.chapterStars, [currentChapter]: Math.max(currentStars, stars) },
+        chapterPassStatus: { ...state.chapterPassStatus, [currentChapter]: stars >= 1 },
+        hintFreeChapters: !state.hintUsedThisChapter && !state.isReplayChapterRun
+          ? state.hintFreeChapters + 1
+          : state.hintFreeChapters,
+        artifactUnlocks: unlockArtifact ? [...state.artifactUnlocks, artifactId] : state.artifactUnlocks,
+        lastUnlockedArtifact: unlockArtifact ? artifactId : null,
       }
-
-      // Check for newly unlocked titles
       const newlyUnlocked = checkTitleUnlocks(nextState)
-      if (newlyUnlocked.length > 0) {
-        return {
-          ...nextState,
-          unlockedTitles: [...nextState.unlockedTitles, ...newlyUnlocked],
-          pendingTitleUnlock: newlyUnlocked,
-        }
+      return {
+        ...nextState,
+        unlockedTitles: [...nextState.unlockedTitles, ...newlyUnlocked],
+        pendingTitleUnlock: newlyUnlocked,
+        completionSummary: buildCompletionSummary(nextState),
       }
-      return nextState
     }
 
     case 'NEXT_CHAPTER': {
-      const maxCh = _getMaxChapterForState(state)
-      const currentStars = state.chapterStars[state.currentChapter] || 0
-      if (state.currentChapter < maxCh && currentStars < 1) {
-        return state
-      }
-
-      const nextChapter = state.currentChapter + 1
-      if (nextChapter > maxCh) {
-        return { ...state, phase: 'game_complete' }
+      const maxChapter = getMaxChapter(state.playerRole || 'pm') || 8
+      if (state.currentChapter >= maxChapter) {
+        return {
+          ...state,
+          phase: 'game_complete',
+          completionSummary: buildCompletionSummary(state),
+        }
       }
       return {
         ...state,
         phase: 'chapter_select',
-        currentChapter: nextChapter,
-        maxUnlockedChapter: Math.max(state.maxUnlockedChapter || 1, nextChapter),
+        currentChapter: state.currentChapter + 1,
         levelAtChapterStart: state.level,
         chapterPhase: 'opening',
         currentProblemIndex: 0,
@@ -388,73 +578,59 @@ function gameReducer(state, action) {
         hintUsedThisChapter: false,
         chapterCorrect: 0,
         chapterTotal: 0,
+        chapterMistakes: 0,
         chapterAttemptedProblems: [],
         chapterProblemResults: {},
         isReplayChapterRun: false,
         attemptCount: 0,
+        coachMode: state.coachModeAlwaysOn,
         bossIntroShown: false,
         pendingTitleUnlock: [],
+        lastUnlockedArtifact: null,
       }
     }
 
     case 'SELECT_CHAPTER': {
       const chapterId = action.payload
-      const maxCh = _getMaxChapterForState(state)
-      if (!Number.isInteger(chapterId) || chapterId < 1 || chapterId > maxCh) return state
-      if (chapterId > (state.maxUnlockedChapter || 1)) return state
-      const wasClearedBefore = (state.chapterStars?.[chapterId] || 0) >= 1
-      return {
-        ...state,
-        phase: 'playing',
-        currentChapter: chapterId,
-        levelAtChapterStart: state.level,
-        chapterPhase: 'opening',
-        currentProblemIndex: 0,
-        storyIndex: 0,
-        hintUsedThisChapter: false,
-        chapterCorrect: 0,
-        chapterTotal: 0,
-        chapterAttemptedProblems: [],
-        chapterProblemResults: {},
-        isReplayChapterRun: wasClearedBefore,
-        attemptCount: 0,
-        bossIntroShown: false,
-        pendingTitleUnlock: [],
-      }
-    }
-
-    case 'ADD_CG_SEEN': {
-      const cgKey = action.payload
-      if ((state.cgSeen || []).includes(cgKey)) return state
-      return { ...state, cgSeen: [...(state.cgSeen || []), cgKey] }
+      const maxChapter = getMaxChapter(state.playerRole || 'pm') || 8
+      if (!Number.isInteger(chapterId) || chapterId < 1 || chapterId > maxChapter) return state
+      if (chapterId > state.maxUnlockedChapter) return state
+      const isReplayChapterRun = (state.chapterStars[chapterId] || 0) >= 1
+      return resetChapterRun(state, chapterId, isReplayChapterRun)
     }
 
     case 'CLEAR_PENDING_TITLES':
       return { ...state, pendingTitleUnlock: [] }
 
-    case 'UNLOCK_TITLE': {
-      if (state.unlockedTitles.includes(action.payload)) return state
-      return {
-        ...state,
-        unlockedTitles: [...state.unlockedTitles, action.payload],
-      }
-    }
+    case 'UNLOCK_TITLE':
+      if (!action.payload || state.unlockedTitles.includes(action.payload)) return state
+      return { ...state, unlockedTitles: [...state.unlockedTitles, action.payload] }
 
     case 'EQUIP_TITLE':
-      return { ...state, currentTitle: action.payload }
+      return { ...state, currentTitle: action.payload || state.currentTitle }
 
     case 'GAME_OVER':
       return { ...state, phase: 'game_over' }
 
+    case 'RETURN_TO_QUEST_BOARD':
+      return {
+        ...state,
+        phase: 'chapter_select',
+        chapterPhase: 'opening',
+        currentProblemIndex: 0,
+        storyIndex: 0,
+        attemptCount: 0,
+        coachMode: state.coachModeAlwaysOn,
+        bossIntroShown: false,
+      }
+
     case 'RESET':
-      return { ...initialState }
+      return createFreshState(state.playerRole || 'pm')
 
     default:
       return state
   }
 }
-
-// --- localStorage helpers (offline fallback) ---
 
 function loadSavedGame() {
   const snapshot = loadLocalSnapshot()
@@ -465,11 +641,8 @@ function loadLocalSnapshot() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-
     const parsed = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') return null
-
-    // New snapshot format
     if (parsed.saveData && typeof parsed.saveData === 'object') {
       return {
         saveData: parsed.saveData,
@@ -477,27 +650,19 @@ function loadLocalSnapshot() {
         userId: parsed.userId || null,
       }
     }
-
-    // Backward compatibility: legacy format was direct game state JSON
-    return {
-      saveData: parsed,
-      updatedAt: null,
-      userId: null,
-    }
+    return { saveData: parsed, updatedAt: null, userId: null }
   } catch {
-    // ignore
     return null
   }
 }
 
 function saveLocalSnapshot(saveData, userId, updatedAt = null) {
   try {
-    const snapshot = {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
       saveData,
       updatedAt: updatedAt || new Date().toISOString(),
       userId: userId || null,
-    }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot))
+    }))
   } catch {
     // ignore
   }
@@ -505,11 +670,9 @@ function saveLocalSnapshot(saveData, userId, updatedAt = null) {
 
 function consumeForceNewGameFlag() {
   try {
-    const shouldForceNew = localStorage.getItem(FORCE_NEW_GAME_KEY) === '1'
-    if (shouldForceNew) {
-      localStorage.removeItem(FORCE_NEW_GAME_KEY)
-    }
-    return shouldForceNew
+    const shouldForce = localStorage.getItem(FORCE_NEW_GAME_KEY) === '1'
+    if (shouldForce) localStorage.removeItem(FORCE_NEW_GAME_KEY)
+    return shouldForce
   } catch {
     return false
   }
@@ -535,8 +698,6 @@ function isLocalNewerThanCloud(localSnapshot, cloudSnapshot) {
   return parseTimestamp(localSnapshot.updatedAt) > parseTimestamp(cloudSnapshot.updatedAt)
 }
 
-// --- Supabase save/load helpers ---
-
 async function loadFromSupabase(userId) {
   try {
     const { data, error } = await supabase
@@ -544,17 +705,13 @@ async function loadFromSupabase(userId) {
       .select('save_data, updated_at')
       .eq('user_id', userId)
       .single()
-
     if (error) {
-      if (error.code === 'PGRST116') return null // no rows found
+      if (error.code === 'PGRST116') return null
       return null
     }
     if (!data?.save_data) return null
-    return {
-      saveData: data.save_data,
-      updatedAt: data.updated_at || null,
-      userId,
-    }
+    if (data.save_data.campaignVersion !== CAMPAIGN_VERSION) return null
+    return { saveData: data.save_data, updatedAt: data.updated_at || null, userId }
   } catch {
     return null
   }
@@ -562,29 +719,21 @@ async function loadFromSupabase(userId) {
 
 async function saveToSupabase(userId, saveData) {
   try {
-    const { error } = await supabase
+    await supabase
       .from('game_saves')
-      .upsert(
-        { user_id: userId, save_data: saveData, updated_at: new Date().toISOString() },
-        { onConflict: 'user_id' }
-      )
-
-    if (error) {
-      // save error ignored silently
-    }
+      .upsert({ user_id: userId, save_data: saveData, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
   } catch {
-    // save error ignored silently
+    // ignore
   }
 }
 
 export function GameProvider({ children }) {
-  const [state, dispatch] = useReducer(gameReducer, initialState)
+  const [state, dispatch] = useReducer(gameReducer, createFreshState())
   const [isHydrating, setIsHydrating] = useState(true)
   const saveTimerRef = useRef(null)
   const initialLoadDone = useRef(false)
   const currentUserIdRef = useRef(null)
 
-  // Load save from Supabase on mount (user is already authenticated when GameProvider renders)
   useEffect(() => {
     let cancelled = false
 
@@ -602,8 +751,8 @@ export function GameProvider({ children }) {
 
         if (supabase) {
           const { data: { session } } = await supabase.auth.getSession()
-          const userId = session?.user?.id
-          currentUserIdRef.current = userId || null
+          const userId = session?.user?.id || null
+          currentUserIdRef.current = userId
 
           if (userId) {
             const cloudSave = await loadFromSupabase(userId)
@@ -612,17 +761,12 @@ export function GameProvider({ children }) {
 
             if (!cancelled && localForUser?.saveData && isLocalNewerThanCloud(localForUser, cloudSave)) {
               dispatch({ type: 'LOAD_GAME', payload: localForUser.saveData })
-              // Keep cloud in sync with fresher local data.
               await saveToSupabase(userId, localForUser.saveData)
             } else if (!cancelled && cloudSave?.saveData) {
               dispatch({ type: 'LOAD_GAME', payload: cloudSave.saveData })
               saveLocalSnapshot(cloudSave.saveData, userId, cloudSave.updatedAt)
-            } else if (!cancelled) {
-              // New user with no cloud save — clear leftover localStorage from other users
-              if (localSnapshot && localSnapshot.userId !== userId) {
-                localStorage.removeItem(STORAGE_KEY)
-              }
             }
+
             if (!cancelled) {
               initialLoadDone.current = true
               setIsHydrating(false)
@@ -631,10 +775,9 @@ export function GameProvider({ children }) {
           }
         }
 
-        // No auth session (or Supabase unavailable): local fallback
         if (!cancelled) {
           const localSnapshot = loadLocalSnapshot()
-          if (localSnapshot?.saveData) {
+          if (localSnapshot?.saveData?.campaignVersion === CAMPAIGN_VERSION) {
             dispatch({ type: 'LOAD_GAME', payload: localSnapshot.saveData })
           }
           initialLoadDone.current = true
@@ -652,37 +795,25 @@ export function GameProvider({ children }) {
     return () => { cancelled = true }
   }, [])
 
-  // Debounced save to both localStorage and Supabase
   const debouncedCloudSave = useCallback((saveState) => {
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current)
-    }
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(async () => {
       if (!supabase) return
-
-      // Save to Supabase if logged in
       const { data: { session } } = await supabase.auth.getSession()
       const userId = session?.user?.id || null
       currentUserIdRef.current = userId
-      if (userId) {
-        await saveToSupabase(userId, saveState)
-      }
+      if (userId) await saveToSupabase(userId, saveState)
     }, SAVE_DEBOUNCE_MS)
   }, [])
 
   useEffect(() => {
     if (!initialLoadDone.current) return
     if (state.phase !== 'title') {
-      // Local save is immediate so refresh cannot lose latest in-progress state.
       saveLocalSnapshot(state, currentUserIdRef.current)
-      // Cloud save remains debounced to reduce write load.
       debouncedCloudSave(state)
     }
-
     return () => {
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current)
-      }
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     }
   }, [state, debouncedCloudSave])
 
@@ -724,16 +855,11 @@ export async function beginNewGameSession() {
   }
 
   if (!supabase) return
-
   try {
     const { data: { session } } = await supabase.auth.getSession()
     const userId = session?.user?.id
     if (!userId) return
-
-    await supabase
-      .from('game_saves')
-      .delete()
-      .eq('user_id', userId)
+    await supabase.from('game_saves').delete().eq('user_id', userId)
   } catch {
     // ignore
   }

@@ -116,6 +116,42 @@ body {
   min-height: 100vh;
 }
 
+/* ===== Accessibility ===== */
+
+/* Focus visible ring for keyboard navigation */
+:focus-visible {
+  outline: 2px solid rgba(103, 198, 255, 0.7);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid rgba(103, 198, 255, 0.7);
+  outline-offset: 2px;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Prevent accidental pull-to-refresh on mobile */
+body {
+  overscroll-behavior: contain;
+}
+
 /* ===== Role Theme Colors ===== */
 [data-role="pm"]        { --color-accent: #5b8df0; }
 [data-role="designer"]  { --color-accent: #b07aa1; }
@@ -386,8 +422,8 @@ body {
 /* Character sprite */
 .character-sprite {
   position: absolute;
-  bottom: 0;
-  height: 80vh;
+  bottom: clamp(-120px, -10vh, -56px);
+  height: min(96vh, 1080px);
   transition: left 0.5s ease, opacity 0.3s ease, filter 0.3s ease;
   z-index: 2;
 }
@@ -425,7 +461,7 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 0 16px 24px;
+  padding: 0 16px 6px;
   z-index: 10;
   cursor: pointer;
 }

@@ -10,8 +10,9 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-bg-primary">
-        <div className="text-white/40 text-sm">로딩 중...</div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-bg-primary gap-4">
+        <div className="h-8 w-8 rounded-full border-2 border-cyan-400/30 border-t-cyan-400 animate-spin" />
+        <p className="text-sm text-white/50">로딩 중...</p>
       </div>
     )
   }

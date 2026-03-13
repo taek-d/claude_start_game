@@ -1,49 +1,46 @@
-// PM 역할 캐릭터 데이터
-// VN 시스템에서 characterId로 캐릭터를 찾을 때 characterMap 사용
-
 export const mentorCharacter = {
   id: 'mentor_pm',
-  name: '김도현',
-  role: '시니어 PM',
-  color: '#5b8df0',
-  nameColor: '#5b8df0',
+  name: '이서아',
+  role: 'Claude Code 코치',
+  color: '#6fb1ff',
+  nameColor: '#6fb1ff',
   expressions: {
-    default: '/images/characters/pm/mentor_default.png',
-    smile: '/images/characters/pm/mentor_smile.png',
-    serious: '/images/characters/pm/mentor_serious.png',
-    impressed: '/images/characters/pm/mentor_impressed.png',
-    frown: '/images/characters/pm/mentor_frown.png',
-    surprise: '/images/characters/pm/mentor_surprise.png',
+    default: '/images/characters/iseoa/1.png',
+    smile: '/images/characters/iseoa/2.png',
+    serious: '/images/characters/iseoa/1.png',
+    impressed: '/images/characters/iseoa/5.png',
+    frown: '/images/characters/iseoa/4.png',
+    surprise: '/images/characters/iseoa/5.png',
   },
 }
 
 export const colleagueFemale = {
   id: 'colleague_f',
   name: '이서아',
-  role: '디자이너',
-  color: '#b07aa1',
-  nameColor: '#b07aa1',
+  role: '가벼운 톤 코치',
+  color: '#f08db5',
+  nameColor: '#f08db5',
   expressions: {
-    default: '/images/characters/pm/colleague_f_default.png',
-    cheer: '/images/characters/pm/colleague_f_cheer.png',
-    shy: '/images/characters/pm/colleague_f_shy.png',
-    worried: '/images/characters/pm/colleague_f_worried.png',
-    excited: '/images/characters/pm/colleague_f_excited.png',
+    default: '/images/characters/iseoa/1.png',
+    cheer: '/images/characters/iseoa/2.png',
+    shy: '/images/characters/iseoa/3.png',
+    worried: '/images/characters/iseoa/4.png',
+    excited: '/images/characters/iseoa/5.png',
   },
 }
 
 export const colleagueMale = {
   id: 'colleague_m',
-  name: '박건우',
-  role: '개발자',
-  color: '#59a14f',
-  nameColor: '#59a14f',
+  name: '이서아',
+  role: '차분한 톤 코치',
+  color: '#67c67b',
+  nameColor: '#67c67b',
   expressions: {
-    default: '/images/characters/pm/colleague_m_default.png',
-    smirk: '/images/characters/pm/colleague_m_smirk.png',
-    serious: '/images/characters/pm/colleague_m_serious.png',
-    flustered: '/images/characters/pm/colleague_m_flustered.png',
-    excited: '/images/characters/pm/colleague_m_excited.png',
+    default: '/images/characters/iseoa/1.png',
+    smirk: '/images/characters/iseoa/2.png',
+    serious: '/images/characters/iseoa/1.png',
+    flustered: '/images/characters/iseoa/3.png',
+    excited: '/images/characters/iseoa/5.png',
   },
 }
 
@@ -64,7 +61,6 @@ export const backgrounds = {
   launch_party: '/images/backgrounds/bg_restaurant.jpg',
 }
 
-// VN 시스템에서 characterId로 캐릭터 데이터를 찾기 위한 맵
 export const characterMap = {
   mentor_pm: mentorCharacter,
   colleague_f: colleagueFemale,

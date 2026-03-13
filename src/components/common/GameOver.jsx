@@ -1,52 +1,44 @@
-import { useGameState, useGameDispatch, clearSavedGame } from '../../hooks/useGameState'
 import { useNavigate } from 'react-router-dom'
-import { getMentorCharacter } from '../../data/roleRegistry'
-import { soundFx } from '../../utils/feedback'
+import { clearSavedGame, useGameDispatch, useGameState } from '../../hooks/useGameState'
 
 export default function GameOver() {
   const state = useGameState()
   const dispatch = useGameDispatch()
   const navigate = useNavigate()
-  const role = state.playerRole || 'pm'
-  const mentor = getMentorCharacter(role)
-
-  const handleRestart = () => {
-    soundFx.click()
-    clearSavedGame()
-    dispatch({ type: 'RESET' })
-    navigate('/')
-  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg-primary p-8 relative overflow-hidden">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-gauge-low/5 rounded-full blur-3xl" />
-      </div>
-
-      <div className="text-center animate-fade-in max-w-md relative z-10">
-        <div className="w-20 h-20 rounded-full bg-gauge-low/15 flex items-center justify-center text-3xl mx-auto mb-6 border-2 border-gauge-low/20">
-          !
-        </div>
-        <h1 className="text-4xl font-extrabold text-gauge-low mb-3">해고</h1>
-        <p className="text-lg text-text-secondary mb-2">
-          Chapter {state.currentChapter}에서 해고되었습니다.
+    <div className="min-h-screen bg-slate-950 px-6 py-10 text-white">
+      <div className="mx-auto max-w-xl rounded-[32px] border border-white/10 bg-slate-950/85 p-8 text-center shadow-2xl shadow-black/40">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-rose-200/70">Pause</p>
+        <h1 className="mt-3 text-4xl font-black tracking-tight text-white">잠깐 다시 정비할까요?</h1>
+        <p className="mt-4 text-base leading-relaxed text-white/60">
+          퀘스트 {state.currentChapter}에서 흐름이 끊겼어요. 초보자 코스에서는 잠깐 멈추는 것도 과정의 일부예요. 세이브를 지우지 않고 다시 시작하거나 퀘스트 보드로 돌아갈 수 있습니다.
         </p>
 
-        <div className="bg-bg-card/60 rounded-xl border border-white/8 p-5 mb-8 text-left">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm font-bold text-tab-blue">{mentor?.name || '멘토'}</span>
-            <div className="h-px flex-1 bg-white/5" />
-          </div>
-          <p className="text-text-secondary text-sm leading-relaxed italic">
-            "아쉽지만... 이 정도 실력으로는 프로젝트를 맡기기 어렵겠어요."
-          </p>
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <button
+            onClick={() => dispatch({ type: 'SELECT_CHAPTER', payload: state.currentChapter })}
+            className="rounded-full bg-cyan-400 px-6 py-3 text-sm font-black text-slate-950 transition hover:scale-[1.02]"
+          >
+            현재 퀘스트 다시 시작
+          </button>
+          <button
+            onClick={() => dispatch({ type: 'RETURN_TO_QUEST_BOARD' })}
+            className="rounded-full border border-white/12 px-6 py-3 text-sm font-semibold text-white/75 transition hover:border-white/25 hover:text-white"
+          >
+            퀘스트 보드로
+          </button>
         </div>
 
         <button
-          onClick={handleRestart}
-          className="px-8 py-4 bg-accent hover:bg-accent-glow text-white rounded-xl text-lg font-bold transition-all hover:scale-[1.03] cursor-pointer shadow-lg shadow-accent/20"
+          onClick={() => {
+            clearSavedGame()
+            dispatch({ type: 'RESET' })
+            navigate('/')
+          }}
+          className="mt-5 rounded-full border border-rose-300/20 bg-rose-400/10 px-6 py-3 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/15"
         >
-          다시 도전하기
+          세이브 지우고 처음으로
         </button>
       </div>
     </div>

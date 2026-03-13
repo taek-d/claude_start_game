@@ -1,264 +1,101 @@
-import { useState } from 'react'
-import { useGameState, useGameDispatch } from '../../hooks/useGameState'
-import { TITLES, CATEGORY_META, RARITY_META } from '../../data/titles'
+import { useMemo, useState } from 'react'
+import { useGameState } from '../../hooks/useGameState'
+import { CATEGORY_META, RARITY_META, TITLES } from '../../data/titles'
 import StatsRadar from './StatsRadar'
-import { soundFx } from '../../utils/feedback'
 
-const CATEGORIES = ['star', 'skill', 'part', 'affection', 'hidden']
+const CATEGORIES = ['mission', 'mastery', 'coach', 'hidden']
 
 export default function TitleCollectionModal({ onClose }) {
   const state = useGameState()
-  const dispatch = useGameDispatch()
-  const [activeCategory, setActiveCategory] = useState('star')
-
+  const [category, setCategory] = useState('mission')
   const unlocked = state.unlockedTitles || []
-  const current = state.currentTitle
 
-  const filtered = TITLES.filter((t) => t.category === activeCategory)
-  const totalUnlocked = TITLES.filter((t) => unlocked.includes(t.id)).length
-
-  const handleEquip = (title) => {
-    soundFx.click()
-    if (!unlocked.includes(title.id)) return
-    dispatch({ type: 'EQUIP_TITLE', payload: title.name })
-  }
+  const filtered = useMemo(() => TITLES.filter((title) => title.category === category), [category])
+  const totalUnlocked = TITLES.filter((title) => unlocked.includes(title.id)).length
 
   return (
     <div
-      style={{
-        position: 'fixed', inset: 0, zIndex: 300,
-        background: 'rgba(2, 8, 20, 0.88)',
-        backdropFilter: 'blur(12px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '20px',
-        animation: 'fadeIn 0.25s ease both',
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/80 p-5 backdrop-blur"
+      onClick={(event) => event.target === event.currentTarget && onClose()}
     >
-      <div style={{
-        width: '100%', maxWidth: '460px',
-        background: 'linear-gradient(160deg, rgba(13,26,50,0.98), rgba(6,12,24,0.99))',
-        border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: '24px',
-        overflow: 'hidden',
-        boxShadow: '0 32px 80px rgba(0,0,0,0.6)',
-        animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both',
-        maxHeight: '90vh',
-        display: 'flex', flexDirection: 'column',
-      }}>
-        {/* Header */}
-        <div style={{
-          padding: '20px 20px 0',
-          borderBottom: '1px solid rgba(255,255,255,0.05)',
-          paddingBottom: '16px',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div className="flex max-h-[90vh] w-full max-w-[480px] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/95 shadow-2xl shadow-black/40">
+        <div className="border-b border-white/8 p-5">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', margin: 0 }}>
-                Title Collection
-              </p>
-              <h2 style={{ fontSize: '20px', fontWeight: 900, color: '#e8edf5', margin: '4px 0 0' }}>칭호 모음</h2>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-200/70">Badge Vault</p>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-white">배지 보관함</h2>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>
-                {totalUnlocked}/{TITLES.length}
-              </span>
-              <button
-                onClick={onClose}
-                style={{
-                  width: '32px', height: '32px', borderRadius: '50%',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  background: 'rgba(255,255,255,0.05)',
-                  color: 'rgba(255,255,255,0.6)', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '16px', lineHeight: 1,
-                }}
-              >
-                ×
-              </button>
+            <button
+              onClick={onClose}
+              className="rounded-full border border-white/10 px-3 py-1.5 text-sm text-white/65 transition hover:border-white/25 hover:text-white"
+            >
+              닫기
+            </button>
+          </div>
+          <div className="mt-4 rounded-3xl border border-white/10 bg-white/5 p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-white/70">해금한 배지</p>
+              <p className="text-lg font-bold text-cyan-50">{totalUnlocked}/{TITLES.length}</p>
             </div>
+            <p className="mt-2 text-sm text-white/55">현재 랭크: {state.currentTitle}</p>
           </div>
-
-          {/* Current title */}
-          <div style={{
-            marginTop: '12px',
-            padding: '8px 12px', borderRadius: '10px',
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.06)',
-            display: 'flex', alignItems: 'center', gap: '8px',
-          }}>
-            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>현재 칭호</span>
-            <span style={{
-              fontSize: '13px', fontWeight: 700,
-              color: '#ffd261',
-              padding: '2px 10px', borderRadius: '6px',
-              background: 'rgba(255,210,97,0.1)',
-              border: '1px solid rgba(255,210,97,0.2)',
-            }}>
-              {current}
-            </span>
-          </div>
-
-          {/* Stats Radar */}
-          <div style={{ marginTop: '16px' }}>
+          <div className="mt-4">
             <StatsRadar />
           </div>
-
-          {/* Category tabs */}
-          <div style={{ display: 'flex', gap: '2px', marginTop: '12px', overflowX: 'auto', paddingBottom: '2px' }}>
-            {CATEGORIES.map((cat) => {
-              const meta = CATEGORY_META[cat]
-              const catTitles = TITLES.filter((t) => t.category === cat)
-              const catUnlocked = catTitles.filter((t) => unlocked.includes(t.id)).length
-              const active = activeCategory === cat
+          <div className="mt-4 flex flex-wrap gap-2">
+            {CATEGORIES.map((item) => {
+              const meta = CATEGORY_META[item]
               return (
                 <button
-                  key={cat}
-                  onClick={() => {
-                    soundFx.click()
-                    setActiveCategory(cat)
-                  }}
-                  style={{
-                    padding: '6px 12px', borderRadius: '8px',
-                    border: active ? `1px solid ${meta.color}30` : '1px solid transparent',
-                    fontSize: '12px', fontWeight: active ? 700 : 500, cursor: 'pointer', whiteSpace: 'nowrap',
-                    background: active ? `${meta.color}15` : 'transparent',
-                    color: active ? meta.color : 'rgba(255,255,255,0.4)',
-                    transition: 'all 0.2s',
-                    display: 'flex', alignItems: 'center', gap: '6px',
-                  }}
+                  key={item}
+                  onClick={() => setCategory(item)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                    category === item
+                      ? 'border-cyan-200/35 bg-cyan-400/12 text-cyan-50'
+                      : 'border-white/10 bg-white/5 text-white/55 hover:border-white/20 hover:text-white'
+                  }`}
                 >
-                  <span style={{
-                    width: '6px', height: '6px', borderRadius: '50%',
-                    background: active ? meta.color : 'rgba(255,255,255,0.2)',
-                    flexShrink: 0, transition: 'all 0.2s',
-                  }} />
                   {meta.label}
-                  <span style={{
-                    fontSize: '10px', fontWeight: 600,
-                    color: active ? `${meta.color}99` : 'rgba(255,255,255,0.2)',
-                  }}>
-                    {catUnlocked}/{catTitles.length}
-                  </span>
                 </button>
               )
             })}
           </div>
         </div>
 
-        {/* Title grid */}
-        <div style={{ overflowY: 'auto', padding: '16px 20px 20px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div className="overflow-y-auto p-5">
+          <div className="space-y-3">
             {filtered.map((title) => {
               const isUnlocked = unlocked.includes(title.id)
-              const isEquipped = current === title.name
-              const rarityMeta = RARITY_META[title.rarity]
-              const isSecret = title.secret && !isUnlocked
-
+              const rarity = RARITY_META[title.rarity]
               return (
                 <div
                   key={title.id}
-                  onClick={() => handleEquip(title)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '12px',
-                    padding: '12px 14px', borderRadius: '14px',
-                    background: isEquipped
-                      ? 'rgba(255,210,97,0.08)'
-                      : isUnlocked
-                        ? 'rgba(255,255,255,0.04)'
-                        : 'rgba(255,255,255,0.02)',
-                    border: isEquipped
-                      ? '1px solid rgba(255,210,97,0.25)'
-                      : isUnlocked
-                        ? '1px solid rgba(255,255,255,0.07)'
-                        : '1px solid rgba(255,255,255,0.04)',
-                    cursor: isUnlocked ? 'pointer' : 'default',
-                    transition: 'all 0.2s',
-                    opacity: isUnlocked ? 1 : 0.45,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (isUnlocked && !isEquipped) {
-                      e.currentTarget.style.background = 'rgba(255,255,255,0.07)'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (isUnlocked && !isEquipped) {
-                      e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
-                    }
-                  }}
+                  className={`rounded-3xl border p-4 ${
+                    isUnlocked ? 'border-white/10 bg-white/5' : 'border-white/6 bg-white/[0.03] opacity-55'
+                  }`}
                 >
-                  {/* Icon */}
-                  <div style={{
-                    width: '40px', height: '40px', borderRadius: '10px',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '20px',
-                    background: isUnlocked ? `${rarityMeta.color}15` : 'rgba(255,255,255,0.04)',
-                    filter: isUnlocked ? 'none' : 'grayscale(1)',
-                    flexShrink: 0,
-                  }}>
-                    {isSecret ? '?' : title.icon}
-                  </div>
-
-                  {/* Info */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                      <span style={{
-                        fontSize: '14px', fontWeight: 700,
-                        color: isUnlocked ? '#e8edf5' : 'rgba(255,255,255,0.4)',
-                      }}>
-                        {isSecret ? '???' : title.name}
-                      </span>
-                      {isUnlocked && (
-                        <span style={{
-                          fontSize: '9px', fontWeight: 700, letterSpacing: '0.08em',
-                          padding: '2px 6px', borderRadius: '4px',
-                          color: rarityMeta.color,
-                          background: `${rarityMeta.color}15`,
-                          border: `1px solid ${rarityMeta.color}30`,
-                        }}>
-                          {rarityMeta.label}
-                        </span>
-                      )}
-                      {isEquipped && (
-                        <span style={{
-                          fontSize: '9px', fontWeight: 700,
-                          padding: '2px 6px', borderRadius: '4px',
-                          color: '#ffd261',
-                          background: 'rgba(255,210,97,0.15)',
-                        }}>
-                          장착 중
-                        </span>
-                      )}
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/6 text-2xl">
+                      {isUnlocked || !title.secret ? title.icon : '❔'}
                     </div>
-                    <p style={{
-                      fontSize: '11px',
-                      color: isUnlocked ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.2)',
-                      margin: '2px 0 0',
-                    }}>
-                      {isSecret ? '조건 미달성' : title.desc}
-                    </p>
-                  </div>
-
-                  {/* Equip indicator */}
-                  {isUnlocked && !isEquipped && (
-                    <div style={{
-                      fontSize: '11px', color: 'rgba(255,255,255,0.25)',
-                      flexShrink: 0,
-                    }}>
-                      탭하여 장착
+                    <div className="flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-[15px] font-bold text-white">{isUnlocked || !title.secret ? title.name : '비밀 배지'}</p>
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: `${rarity.color}20`, color: rarity.color }}>
+                          {rarity.label}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm leading-relaxed text-white/60">
+                        {isUnlocked || !title.secret ? title.desc : '조건을 만족하면 정체가 공개됩니다.'}
+                      </p>
                     </div>
-                  )}
+                  </div>
                 </div>
               )
             })}
           </div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px) } to { opacity: 1; transform: translateY(0) } }
-      `}</style>
     </div>
   )
 }

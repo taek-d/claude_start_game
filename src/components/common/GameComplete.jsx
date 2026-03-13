@@ -1,286 +1,253 @@
-import { useState, useEffect } from 'react'
-import {
-  useGameState, useGameDispatch, clearSavedGame,
-  getAffectionStage, getTrustLabel,
-} from '../../hooks/useGameState'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  getColleagueCharacter, getCharacterImage, getMentorCharacter,
-  getRoleBackgrounds,
-} from '../../data/roleRegistry'
+import { clearSavedGame, useGameDispatch, useGameState } from '../../hooks/useGameState'
+import { TOOL_CARDS } from '../../data/roles/pm/courseMeta'
+import { REALITY_CHECK_META } from '../../data/roles/pm/questSupport'
+import { getChapterMeta } from '../../data/roleRegistry'
+import LearningJournalModal, { JournalEditModal, buildJournalEntries } from './LearningJournalModal'
 
-const GRADE_CONFIG = {
-  S: { text: '#ffd261', bg: 'rgba(255,210,97,0.12)', border: 'rgba(255,210,97,0.3)', glow: 'rgba(255,210,97,0.3)' },
-  A: { text: '#48A868', bg: 'rgba(72,168,104,0.12)', border: 'rgba(72,168,104,0.3)', glow: 'rgba(72,168,104,0.2)' },
-  B: { text: '#f0a05b', bg: 'rgba(240,160,91,0.12)', border: 'rgba(240,160,91,0.3)', glow: 'rgba(240,160,91,0.2)' },
-  C: { text: '#8899b0', bg: 'rgba(136,153,176,0.12)', border: 'rgba(136,153,176,0.3)', glow: 'rgba(136,153,176,0.15)' },
+const skillLabels = {
+  toolSense: '도구 감각',
+  promptCraft: '요청 설계',
+  recovery: '복구 감각',
+  workflow: '흐름 운영',
 }
 
-function getEnding(state, mentorName, colleagueName) {
-  if (state.level >= 9 && state.affection >= 80) {
-    return {
-      title: 'CPO의 자질 & 해피엔딩',
-      grade: 'S',
-      message: `"${state.playerName}... 이렇게 빠르게 성장할 줄 몰랐어요. 앞으로도 함께 제품을 만들어가요."`,
-      speaker: colleagueName,
-      epilogue: '수습을 마치고 핵심 PM이 됐다. 그리고, 함께 성장할 동료도 얻었다.',
-    }
-  }
-  if (state.level >= 7) {
-    return {
-      title: '시니어 PM 달성',
-      grade: 'A',
-      message: `"${state.playerName}님, 수고했어요. 우리 팀에 있어줘서 다행이에요."`,
-      speaker: mentorName,
-      epilogue: '수습 기간을 통과하고 시니어 PM으로 성장했다. 아직 갈 길이 있지만, 방향이 보인다.',
-    }
-  }
-  if (state.level >= 4) {
-    return {
-      title: 'PM의 길',
-      grade: 'B',
-      message: '"아직 갈 길이 멀지만, 충분히 성장했어요. 계속 이 방향으로 가요."',
-      speaker: mentorName,
-      epilogue: '성장했다. 처음보다 훨씬. 다음엔 더 잘할 수 있을 것 같다.',
-    }
-  }
-  return {
-    title: '수습 통과',
-    grade: 'C',
-    message: '"조금 더 노력하면 좋은 PM이 될 거예요. 포기하지 마요."',
-    speaker: mentorName,
-    epilogue: '수습은 통과했다. 아직 배울 것이 많다는 걸 알게 됐다.',
-  }
+const readinessMeta = {
+  warming_up: {
+    title: '시작 준비 중',
+    description: '게임 안 흐름은 익혔지만, 실제 환경에서 한 번 더 손을 움직여보면 훨씬 안정됩니다.',
+    tone: 'border-amber-300/15 bg-amber-400/10 text-amber-50',
+  },
+  solid_progress: {
+    title: '거의 준비됨',
+    description: '브릿지 메모와 현실 체크가 꽤 쌓였습니다. 작은 실제 폴더 하나만 정해 바로 시작해도 좋습니다.',
+    tone: 'border-cyan-300/15 bg-cyan-400/10 text-cyan-50',
+  },
+  ready_to_launch: {
+    title: '첫 실전 준비 완료',
+    description: '브릿지 과제와 현실 체크를 충분히 통과했습니다. 이제 작은 실제 작업에서 Claude Code를 켜볼 준비가 됐습니다.',
+    tone: 'border-emerald-300/15 bg-emerald-400/10 text-emerald-50',
+  },
 }
 
 export default function GameComplete() {
   const state = useGameState()
   const dispatch = useGameDispatch()
   const navigate = useNavigate()
-  const [phase, setPhase] = useState(0) // 0 = loading, 1 = showing
+  const summary = state.completionSummary || { weakestSkills: [], pendingRealityQuestIds: [], bridgeNeedsWorkIds: [] }
+  const chapterTitleMap = Object.fromEntries(
+    getChapterMeta(state.playerRole || 'pm').map((chapter) => [String(chapter.id), chapter.title]),
+  )
+  const journalEntries = useMemo(() => buildJournalEntries(state, chapterTitleMap), [chapterTitleMap, state])
+  const recentBridgeNotes = Object.entries(state.bridgeResponses || {})
+    .sort(([leftId], [rightId]) => Number(leftId) - Number(rightId))
+    .slice(-3)
+  const recentRealityChecks = Object.entries(state.realityChecks || {})
+    .filter(([, entry]) => entry?.completed)
+    .sort(([leftId], [rightId]) => Number(leftId) - Number(rightId))
+    .slice(-3)
+  const readiness = readinessMeta[summary.readinessLevel] || readinessMeta.warming_up
+  const totalRealityChecks = Object.keys(REALITY_CHECK_META).length
 
-  const role = state.playerRole || 'pm'
-  const backgrounds = getRoleBackgrounds(role)
-  const colleague = getColleagueCharacter(role, state.playerGender)
-  const colleagueName = colleague?.name || ''
-  const colleagueImg = colleague ? getCharacterImage(colleague.id, 'default', role) : null
-  const mentor = getMentorCharacter(role)
-  const mentorName = mentor?.name || ''
-  const affectionStage = getAffectionStage(state.affection)
-  const trustLabel = getTrustLabel(affectionStage)
-  const ending = getEnding(state, mentorName, colleagueName)
-  const cfg = GRADE_CONFIG[ending.grade]
+  const [showJournal, setShowJournal] = useState(false)
+  const [editingEntry, setEditingEntry] = useState(null)
 
-  const accuracy = (state.correctCount + state.incorrectCount) > 0
-    ? Math.round((state.correctCount / (state.correctCount + state.incorrectCount)) * 100)
-    : 0
+  const saveEditedNote = ({ text, checkedStepIds }) => {
+    if (!editingEntry) return
 
-  // Total stars
-  const totalStars = Object.values(state.chapterStars || {}).reduce((a, b) => a + b, 0)
-  const maxStars = getMaxChapter(role) * 3
+    if (editingEntry.type === 'bridge') {
+      dispatch({
+        type: 'UPDATE_BRIDGE_RESPONSE',
+        payload: {
+          questId: editingEntry.questId,
+          text,
+        },
+      })
+    } else {
+      dispatch({
+        type: 'UPDATE_REALITY_CHECK',
+        payload: {
+          questId: editingEntry.questId,
+          note: text,
+          checkedStepIds,
+        },
+      })
+    }
 
-  useEffect(() => {
-    const t = setTimeout(() => setPhase(1), 100)
-    return () => clearTimeout(t)
-  }, [])
-
-  const handleRestart = () => {
-    clearSavedGame()
-    dispatch({ type: 'RESET' })
-    navigate('/')
+    setEditingEntry(null)
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: '#060d1a',
-      display: 'flex',
-      position: 'relative', overflow: 'hidden',
-    }}>
-      {/* Ending credits background */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        backgroundImage: backgrounds.launch_party ? `url(${backgrounds.launch_party})` : 'none',
-        backgroundSize: 'cover', backgroundPosition: 'center',
-        opacity: phase === 1 ? 0.18 : 0,
-        transition: 'opacity 2s ease 0.3s',
-      }} />
-
-      {/* Colleague background image */}
-      {affectionStage >= 4 && colleagueImg && (
-        <div style={{
-          position: 'absolute', right: 0, top: 0, bottom: 0,
-          width: '45%',
-          backgroundImage: `url(${colleagueImg})`,
-          backgroundSize: 'cover', backgroundPosition: 'top center',
-          opacity: phase === 1 ? 0.25 : 0,
-          transition: 'opacity 1.5s ease 0.5s',
-          maskImage: 'linear-gradient(to left, rgba(0,0,0,0.5) 0%, transparent 100%)',
-          WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,0.5) 0%, transparent 100%)',
-        }} />
+    <div className="min-h-screen bg-slate-950 px-6 py-10 text-white">
+      {showJournal && (
+        <LearningJournalModal
+          entries={journalEntries}
+          onClose={() => setShowJournal(false)}
+          onEdit={(entry) => {
+            setShowJournal(false)
+            setEditingEntry(entry)
+          }}
+        />
+      )}
+      {editingEntry && (
+        <JournalEditModal
+          entry={editingEntry}
+          realityMeta={editingEntry.type === 'reality' ? REALITY_CHECK_META[editingEntry.questId] : null}
+          onCancel={() => setEditingEntry(null)}
+          onSave={saveEditedNote}
+        />
       )}
 
-      {/* Ambient glow */}
-      <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none',
-      }}>
-        <div style={{
-          position: 'absolute', top: '40%', left: '30%',
-          transform: 'translate(-50%, -50%)',
-          width: '600px', height: '400px', borderRadius: '50%',
-          background: `radial-gradient(ellipse, ${cfg.glow} 0%, transparent 70%)`,
-          opacity: phase === 1 ? 1 : 0,
-          transition: 'opacity 1s ease',
-        }} />
-      </div>
+      <div className="mx-auto max-w-5xl rounded-[32px] border border-white/10 bg-slate-950/85 p-8 shadow-2xl shadow-black/40">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-cyan-200/70">Course Complete</p>
+        <h1 className="mt-3 text-5xl font-black tracking-tight text-white">첫 실전 준비도 리포트</h1>
+        <p className="mt-4 text-base leading-relaxed text-white/60">
+          이제 당신은 Claude Code를 처음 켜서 작업 폴더에서 시작하고, 자료를 읽히고, 요청을 고치고, 막히면 복구하는 기본 루프를 경험했습니다.
+        </p>
 
-      {/* Content */}
-      <div style={{
-        position: 'relative', zIndex: 10,
-        flex: 1, display: 'flex', alignItems: 'center',
-        padding: '40px 24px',
-        maxWidth: '640px', margin: '0 auto',
-      }}>
-        <div style={{
-          width: '100%',
-          opacity: phase === 1 ? 1 : 0,
-          transform: phase === 1 ? 'translateY(0)' : 'translateY(20px)',
-          transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
-        }}>
-          {/* Grade + Title */}
-          <div style={{ marginBottom: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
-              <div style={{
-                width: '56px', height: '56px', borderRadius: '16px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: cfg.bg, border: `2px solid ${cfg.border}`,
-                boxShadow: `0 0 24px ${cfg.glow}`,
-              }}>
-                <span style={{
-                  fontSize: '24px', fontWeight: 900,
-                  color: cfg.text,
-                }}>
-                  {ending.grade}
-                </span>
-              </div>
-              <div>
-                <p style={{
-                  fontSize: '11px', fontWeight: 700,
-                  letterSpacing: '0.2em', textTransform: 'uppercase',
-                  color: 'rgba(255,255,255,0.35)', margin: 0,
-                }}>
-                  Game Complete
+        <div className={`mt-6 rounded-[28px] border p-5 ${readiness.tone}`}>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-80">Readiness</p>
+          <h2 className="mt-2 text-2xl font-black text-white">{readiness.title}</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed opacity-90">{readiness.description}</p>
+        </div>
+
+        <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5">
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-white/50">최종 레벨</p>
+            <p className="mt-2 text-2xl font-black text-cyan-50">Lv.{state.level}</p>
+            <p className="mt-1 text-sm text-white/50">{state.currentTitle}</p>
+          </div>
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-white/50">자신감</p>
+            <p className="mt-2 text-2xl font-black text-rose-50">{state.confidence}</p>
+          </div>
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-white/50">도구 카드</p>
+            <p className="mt-2 text-2xl font-black text-white">{state.artifactUnlocks.length}</p>
+          </div>
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-white/50">브릿지 통과</p>
+            <p className="mt-2 text-2xl font-black text-white">
+              {summary.bridgeReadyCount || 0}/{summary.totalBridgeEvaluated || 0}
+            </p>
+          </div>
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-white/50">현실 체크</p>
+            <p className="mt-2 text-2xl font-black text-white">
+              {summary.realityCheckCount || 0}/{totalRealityChecks}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={() => setShowJournal(true)}
+            className="rounded-full border border-white/12 px-5 py-2.5 text-sm font-semibold text-white/75 transition hover:border-white/25 hover:text-white"
+          >
+            전체 기록 보기
+          </button>
+        </div>
+
+        <div className="mt-8 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="rounded-[28px] border border-white/10 bg-white/5 p-6">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/50">내가 모은 도구 카드</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {state.artifactUnlocks.map((artifactId) => {
+                const artifact = TOOL_CARDS[artifactId]
+                if (!artifact) return null
+                return (
+                  <div key={artifact.id} className="rounded-3xl border border-cyan-300/15 bg-cyan-400/10 p-4">
+                    <p className="text-lg font-black text-white">{artifact.icon} {artifact.name}</p>
+                    <p className="mt-2 text-sm leading-relaxed text-cyan-50/85">{artifact.description}</p>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-[28px] border border-white/10 bg-white/5 p-6">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/50">다음에 더 챙기면 좋은 것</p>
+            <div className="mt-4 space-y-3">
+              {summary.weakestSkills.map((key) => (
+                <div key={key} className="rounded-3xl border border-white/10 bg-black/15 p-4">
+                  <p className="text-sm font-bold text-white">{skillLabels[key]}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-white/55">
+                    다음 실제 작업에서 이 감각을 한 번 더 써보면 훨씬 빠르게 익숙해집니다.
+                  </p>
+                </div>
+              ))}
+
+              {summary.pendingRealityQuestIds?.length > 0 && (
+                <div className="rounded-3xl border border-amber-300/15 bg-amber-400/10 p-4">
+                  <p className="text-sm font-bold text-white">아직 현실 체크가 비어 있는 퀘스트</p>
+                  <p className="mt-2 text-sm leading-relaxed text-amber-50/85">
+                    {summary.pendingRealityQuestIds.map((questId) => `Quest ${questId} ${chapterTitleMap[String(questId)] || ''}`).join(', ')}
+                  </p>
+                </div>
+              )}
+
+              {summary.bridgeNeedsWorkIds?.length > 0 && (
+                <div className="rounded-3xl border border-cyan-300/15 bg-cyan-400/10 p-4">
+                  <p className="text-sm font-bold text-white">브릿지 메모를 더 구체화하면 좋은 퀘스트</p>
+                  <p className="mt-2 text-sm leading-relaxed text-cyan-50/85">
+                    {summary.bridgeNeedsWorkIds.map((questId) => `Quest ${questId} ${chapterTitleMap[String(questId)] || ''}`).join(', ')}
+                  </p>
+                </div>
+              )}
+
+              <div className="rounded-3xl border border-emerald-300/15 bg-emerald-400/10 p-4">
+                <p className="text-sm font-bold text-white">첫 실전 추천</p>
+                <p className="mt-2 text-sm leading-relaxed text-emerald-50/85">
+                  진짜 폴더 하나를 정한 뒤, 먼저 구조를 설명해 달라는 요청으로 시작해보세요. 처음부터 구현보다 “읽고 파악하기”가 훨씬 안전합니다.
                 </p>
-                <h1 style={{
-                  fontSize: '22px', fontWeight: 900,
-                  color: '#e8edf5', margin: '4px 0 0',
-                  lineHeight: 1.2,
-                }}>
-                  {ending.title}
-                </h1>
               </div>
             </div>
-            <p style={{
-              fontSize: '14px', color: 'rgba(255,255,255,0.5)',
-              fontStyle: 'italic', margin: 0,
-            }}>
-              {ending.epilogue}
-            </p>
           </div>
+        </div>
 
-          {/* Level & Trust badges */}
-          <div style={{
-            display: 'flex', gap: '8px', flexWrap: 'wrap',
-            marginBottom: '20px',
-          }}>
-            <span style={{
-              padding: '5px 14px', borderRadius: '99px',
-              background: 'rgba(91,141,240,0.12)',
-              border: '1px solid rgba(91,141,240,0.2)',
-              fontSize: '13px', fontWeight: 700, color: '#5b8df0',
-            }}>
-              Lv.{state.level} {state.currentTitle}
-            </span>
-            <span style={{
-              padding: '5px 14px', borderRadius: '99px',
-              background: 'rgba(240,91,141,0.12)',
-              border: '1px solid rgba(240,91,141,0.2)',
-              fontSize: '13px', fontWeight: 600, color: '#f05b8d',
-            }}>
-              {colleagueName} {trustLabel}
-            </span>
+        {recentBridgeNotes.length > 0 && (
+          <div className="mt-6 rounded-[28px] border border-cyan-300/15 bg-cyan-400/8 p-6">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-200/75">최근 브릿지 메모</p>
+            <div className="mt-4 grid gap-3">
+              {recentBridgeNotes.map(([questId, entry]) => (
+                <div key={questId} className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+                  <p className="text-sm font-bold text-white">
+                    Quest {questId} · {chapterTitleMap[questId] || '브릿지'}
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-cyan-50/85">{entry.text}</p>
+                </div>
+              ))}
+            </div>
           </div>
+        )}
 
-          {/* Quote card */}
-          <div style={{
-            background: 'linear-gradient(160deg, rgba(17,29,48,0.85), rgba(8,14,26,0.9))',
-            border: '1px solid rgba(255,255,255,0.07)',
-            borderRadius: '16px',
-            padding: '18px 20px',
-            marginBottom: '16px',
-          }}>
-            <p style={{
-              fontSize: '11px', fontWeight: 700,
-              letterSpacing: '0.1em', color: cfg.text,
-              margin: '0 0 8px', textTransform: 'uppercase',
-            }}>
-              {ending.speaker}
-            </p>
-            <p style={{
-              fontSize: '15px', color: '#e8edf5',
-              lineHeight: 1.7, margin: 0,
-              fontStyle: 'italic',
-            }}>
-              {ending.message}
-            </p>
+        {recentRealityChecks.length > 0 && (
+          <div className="mt-6 rounded-[28px] border border-emerald-300/15 bg-emerald-400/8 p-6">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200/75">최근 현실 체크 메모</p>
+            <div className="mt-4 grid gap-3">
+              {recentRealityChecks.map(([questId, entry]) => (
+                <div key={questId} className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+                  <p className="text-sm font-bold text-white">
+                    Quest {questId} · {chapterTitleMap[questId] || '현실 체크'}
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-emerald-50/85">{entry.note}</p>
+                </div>
+              ))}
+            </div>
           </div>
+        )}
 
-          {/* Stats grid */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px',
-            marginBottom: '24px',
-          }}>
-            {[
-              { label: '총 정답', value: state.correctCount, color: '#48A868' },
-              { label: '정확도', value: `${accuracy}%`, color: '#e8edf5' },
-              { label: '총 XP', value: state.xp, color: '#5b8df0' },
-              { label: '별 수집', value: `${totalStars}/${maxStars}`, color: '#ffd261' },
-            ].map((s) => (
-              <div key={s.label} style={{
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.06)',
-                borderRadius: '12px',
-                padding: '12px 8px',
-                textAlign: 'center',
-              }}>
-                <div style={{ fontSize: '18px', fontWeight: 800, color: s.color }}>{s.value}</div>
-                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', marginTop: '2px' }}>{s.label}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* CTA button */}
+        <div className="mt-8 flex flex-wrap justify-end gap-3">
           <button
-            onClick={handleRestart}
-            style={{
-              width: '100%', padding: '16px',
-              borderRadius: '16px', border: 'none',
-              background: 'linear-gradient(135deg, #5b8df0, #3d6fdf)',
-              color: '#fff', fontSize: '16px', fontWeight: 700,
-              cursor: 'pointer',
-              boxShadow: '0 8px 32px rgba(91,141,240,0.3)',
-              transition: 'all 0.2s',
+            onClick={() => {
+              clearSavedGame()
+              dispatch({ type: 'RESET' })
+              navigate('/')
             }}
-            onMouseEnter={(e) => {
-              e.target.style.transform = 'scale(1.02)'
-              e.target.style.boxShadow = '0 12px 40px rgba(91,141,240,0.5)'
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.transform = 'scale(1)'
-              e.target.style.boxShadow = '0 8px 32px rgba(91,141,240,0.3)'
-            }}
+            className="rounded-full bg-cyan-400 px-6 py-3 text-sm font-black text-slate-950 transition hover:scale-[1.02]"
           >
-            처음부터 다시 하기
+            처음부터 다시 시작
           </button>
         </div>
       </div>

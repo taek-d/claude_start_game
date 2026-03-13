@@ -1,13 +1,3 @@
-// PM 역할 레벨별 칭호
-export const LEVEL_TITLES = [
-  '수습 PM',
-  'PM 루키',
-  '기획 전사',
-  '스프린트 마스터',
-  '로드맵 설계자',
-  '이해관계자 달인',
-  '제품 전략가',
-  '시니어 PM',
-  'PM 리더',
-  'CPO',
-]
+import { LEVEL_TITLES } from './courseMeta.js'
+
+export { LEVEL_TITLES }

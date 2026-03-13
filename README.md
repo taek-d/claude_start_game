@@ -1,336 +1,133 @@
-# Tableau Survival (태블로 생존기)
+# CC101 Quest
 
-> **비주얼 노벨 스토리 + 결정적 채점 + 게이미피케이션**을 결합한 Tableau 학습 게임
+`CC101 Quest`는 Claude Code를 처음 배우는 사람을 위한 미션형 입문 게임입니다.  
+겉으로는 짧은 퀘스트를 깨는 게임처럼 보이지만, 내부 구조는 실제 Claude Code 첫 사용 흐름에 맞춘 초보자 온보딩 코스입니다.
 
----
+## 핵심 방향
 
-## Why this exists
+- 첫 5분 안에 손에 잡히는 성공 경험 만들기
+- 실패해도 안전하게 다시 시도하게 만들기
+- 게임 안 학습을 실제 내 폴더와 자료로 연결하기
 
-기존 Tableau 학습은 두 가지 구조적 한계를 가집니다.
+## 현재 제품 형태
 
-| 문제 | 기존 접근 | Tableau Survival |
-|------|----------|-----------------|
-| 낮은 학습 지속률 | 개념 나열식 튜토리얼, 실습 동기 부재 | 비주얼 노벨 스토리 + 캐릭터 호감도로 학습 몰입 유도 |
-| 실습 환경 부재 | Tableau Desktop 설치 필요, 즉각적 피드백 없음 | 드래그 앤 드롭 차트 빌더 + 계산식 에디터를 브라우저에서 즉시 채점 |
+현재 구현 기준은 `CC101 Quest v4`입니다.
 
-이 프로젝트는 학습 콘텐츠를 **게임 메커니즘 안에 배치**하여, 플레이어가 스토리를 진행하는 과정에서 자연스럽게 Tableau의 개념·조작·분석 기법을 체득하도록 설계했습니다.
+퀘스트 흐름:
+1. 도구를 고르자
+2. 처음 켜기
+3. 어디서 시작해야 하지?
+4. 먼저 읽게 하기
+5. 규칙을 남기자
+6. 좋은 요청 만들기
+7. 마음에 안 들면 되돌리고 다시 말하기
+8. 길어져도 괜찮아
 
-### 핵심 설계 원칙
+이 순서는 [CC101 한국어 가이드](https://cc101.axwith.com/ko)의 초보자 흐름을 기준으로 잡았습니다.
 
-1. **결정적 채점 우선**: 3종 문제(퀴즈·블록 드래그·계산식)를 모두 클라이언트에서 즉시 검증. 서버 왕복 없이 피드백 제공
-2. **스토리 기반 동기 부여**: 20챕터 비주얼 노벨 스토리, 캐릭터 호감도, CG 해금 등 게임 요소로 학습 지속률 확보
-3. **점진적 난이도 설계**: 기초(차원/측정값) → 계산식(LOD) → 비즈니스 분석(코호트/파레토) → 실무 대시보드까지 4단계 커리큘럼
+- 도구 구분
+- 설치/로그인/첫 실행
+- 작업 폴더
+- read-first 워크플로우
+- `CLAUDE.md`
+- 좋은 요청과 `@file`
+- 복구와 안전 루프
+- 세션 관리와 첫 실전 사이클
 
----
+## 주요 학습 장치
 
-## 주요 기능
+### 1. 브릿지 퀘스트
+- 각 퀘스트 끝에서 `선택 + 실제 한 줄 메모`를 남깁니다.
+- 단순 글자 수가 아니라 퀘스트별 핵심 요소를 포함했는지 루브릭으로 평가합니다.
+- 예: 폴더, `@file`, 복구 행동, 세션 도구
 
-### 20챕터 스토리 모드
-회사 신입으로 입사하여 Tableau 업무를 수행하는 비주얼 노벨 형식의 메인 스토리입니다.
+관련 파일:
+- [BuffSelect.jsx](E:/프로젝트/클로드_초보_게임/tableau-survival/src/components/chapter/BuffSelect.jsx)
+- [questSupport.js](E:/프로젝트/클로드_초보_게임/tableau-survival/src/data/roles/pm/questSupport.js)
 
-- **4개 파트 × 5챕터**: 태블로 기초 → 계산의 기술 → 비즈니스 분석 → 실무 대시보드
-- 챕터 진행: 오프닝 → 브리핑 → 문제 풀이 → 보스전 → 클리어 → 이벤트 선택
-- 비주얼 노벨 씬 + 배경 + 캐릭터 스프라이트 + 표정 변화
-- 챕터별 1~3성 평가, 정확도와 힌트 사용 여부에 따라 결정
+### 2. 현실 체크
+- CC101의 “실제로 한 번 해보기” 흐름을 반영한 짧은 현실 과제입니다.
+- 퀘스트 2, 3, 4, 7, 8 끝에 실제 행동 체크리스트와 메모가 이어집니다.
+- 예: 터미널 열기, 설치 확인, 실제 폴더 정하기, 복구 행동 정하기, 첫 미션과 `/compact` 정하기
 
-### 3종 문제 유형
+관련 파일:
+- [RealityCheckCard.jsx](E:/프로젝트/클로드_초보_게임/tableau-survival/src/components/chapter/RealityCheckCard.jsx)
+- [questSupport.js](E:/프로젝트/클로드_초보_게임/tableau-survival/src/data/roles/pm/questSupport.js)
 
-| 유형 | 문제 수 | 검증 방식 | Tableau 대응 개념 |
-|------|--------|----------|-----------------|
-| **퀴즈** | 30문제 | 단일/다중 선택 정답 매칭 | 개념 이해 (차원·측정값, 마크 카드 등) |
-| **블록 드래그** | 13문제 | 슬롯별 정답 비교 + 대안 정답 지원 | 차트 구성 (축·색상·크기·필터 배치) |
-| **계산식** | 18문제 | 정규식 패턴 매칭 + 부분 피드백 | 수식 작성 (IF/CASE, LOD, 테이블 계산) |
+### 3. 완전 초보 모드
+- 시작 화면에서 `완전 초보 모드`를 켤 수 있습니다.
+- 이 모드는 `코치 모드 항상 켜기`를 함께 켜고, 퀘스트 보드와 현실 체크에서 더 쉬운 안내를 먼저 보여줍니다.
 
-### 게임 시스템
+관련 파일:
+- [CharacterSetup.jsx](E:/프로젝트/클로드_초보_게임/tableau-survival/src/components/common/CharacterSetup.jsx)
 
-**경험치 & 레벨**
-- 10단계 레벨: 수습 분석가 → 태블로 마스터
-- 정답 +8 XP, 오답 +1 XP, 힌트 미사용 보너스 +3 XP
+## 활성 문제 타입
 
-**캐릭터 호감도**
-- 0~100 범위, 스토리 선택지와 정답 연속 달성으로 상승
-- 5단계 호감도에 따른 스토리 분기 및 엔딩 변화
-- CG(일러스트) 해금: 우산, 선물, 밤 산책, 고백 등 히든 이벤트
+현재 코어 캠페인에서 쓰는 문제 타입은 4개입니다.
 
-**칭호 시스템** (25종)
+- `quick_choice`
+- `card_sort`
+- `prompt_build`
+- `workflow_sim`
 
-| 카테고리 | 예시 | 해금 조건 |
-|---------|------|----------|
-| 별 수집 (5종) | 별빛 수습생 → 별 수집 완료 | 누적 별 10~60개 |
-| 실력 (4종) | 연속 무결, 퍼펙트 클리어 | 5연속 정답, 100% 챕터 클리어 |
-| 파트 (5종) | 기초 마스터 → 태블로 완주자 | 각 파트 및 전체 20챕터 클리어 |
-| 호감도 (5종) | 동기의 시작 → 특별한 우리 | 호감도 20~100 달성 |
-| 히든 (5종) | 비 오는 날의 우산, 고백의 순간 | CG 이벤트 해금 시 자동 획득 |
+라우터:
+- [QuestionRouter.jsx](E:/프로젝트/클로드_초보_게임/tableau-survival/src/components/questions/QuestionRouter.jsx)
 
-**4방향 이벤트 루트**
-- 교류(카페) / 피드백(회의실) / 집중(야근) / 네트워킹(식당)
-- 선택지 키워드와 보상 구조에 따라 루트가 자동 결정
+레거시 Tableau 문제 체인은 제거되었습니다.
 
----
+## 저장 구조
 
-## 아키텍처
+상태는 [useGameState.jsx](E:/프로젝트/클로드_초보_게임/tableau-survival/src/hooks/useGameState.jsx)에서 관리합니다.
 
-```
-┌───────────────────────────────────────────────────────────┐
-│                     Frontend (React SPA)                   │
-│                                                           │
-│  ┌─ 비주얼 노벨 ──┐  ┌─ 문제 풀이 ──────────────────────┐ │
-│  │ VNScene         │  │ QuizQuestion    (선택형)          │ │
-│  │ DialogueBox     │  │ BlockDragQuestion (차트 빌더)     │ │
-│  │ CharacterSprite │  │ CalcFieldQuestion (계산식 에디터) │ │
-│  └────────────────┘  └──────────────────────────────────┘ │
-│                                                           │
-│  ┌─ 채점 엔진 ────────────────────────────────────────┐   │
-│  │ quizChecker.js      → 정답 ID 매칭                  │   │
-│  │ blockDragChecker.js → 슬롯별 비교 + 대안 정답       │   │
-│  │ calcFieldValidator.js → 정규식 패턴 + 부분 피드백   │   │
-│  └────────────────────────────────────────────────────┘   │
-│                                                           │
-│  ┌─ 게임 상태 (useGameState) ────────────────────────┐    │
-│  │ Context + useReducer                               │    │
-│  │ XP, 레벨, 호감도, 칭호, 별, 힌트, CG 해금          │    │
-│  │ localStorage (즉시) + Supabase (디바운스 2초)       │    │
-│  └───────────────────────────┬────────────────────────┘    │
-└──────────────────────────────┼────────────────────────────┘
-                               │ Auth / Save
-                               ▼
-                  ┌─────────────────────────┐
-                  │       Supabase          │
-                  │                         │
-                  │  auth.users             │
-                  │  game_saves (JSONB)     │
-                  │  RLS per user           │
-                  └─────────────────────────┘
-```
+주요 필드:
+- `confidence`
+- `coachModeAlwaysOn`
+- `beginnerMode`
+- `artifactUnlocks`
+- `masteryBySkill`
+- `bridgeResponses`
+- `bridgeRubricResults`
+- `realityChecks`
+- `completionSummary`
 
-### 게임 플로우
+현재 저장 버전:
+- campaign version: `cc101-quest-v4`
+- localStorage key: `cc101-quest-save-v4`
 
-```
-로그인 → 캐릭터 생성 → 챕터 선택
-                          │
-                 ┌────────▼────────┐
-                 │   ChapterFlow   │
-                 ├─ opening (VN)   │
-                 ├─ briefing (VN)  │
-                 ├─ problems ──────┼─→ QuestionRouter → Quiz / Block / Calc
-                 ├─ boss           │        │
-                 ├─ clear (결과)   │   결정적 채점 (클라이언트)
-                 └─ event (선택지) │   → XP·호감도·칭호 업데이트
-                          │        │   → localStorage + Supabase 저장
-                          ▼
-                    다음 챕터 해금
+## 실행
+
+```bash
+npm install
+npm run dev
+npm run build
 ```
 
-> **설계 의도**: 채점을 클라이언트에서 수행하여 서버 의존 없이 즉각적 피드백을 제공합니다. 게임 상태는 localStorage에 즉시 저장(오프라인 복원력)하고, Supabase에 2초 디바운스로 비동기 백업합니다.
+기본 로컬 주소:
+- `http://127.0.0.1:4173`
 
----
+## 현재 검증 기준
 
-## 결정적 채점 엔진
+의미 있는 변경 후 최소 검증:
+1. `npm run build`
+2. 새 게임 시작 또는 저장 상태 시드
+3. 변경된 퀘스트/화면 진입
+4. 실패 -> 수정 -> 통과 루프 확인
+5. 퀘스트 클리어/보드 반영/수료 리포트 반영 확인
 
-3종의 문제 유형 각각에 대해 클라이언트 사이드 검증 로직을 구현했습니다.
+## 참고 파일
 
-### 퀴즈 채점 (`quizChecker.js`)
-- 단일 선택: 정답 옵션 ID와 선택 ID 일치 확인
-- 다중 선택: 정답 ID 배열을 정렬 후 순차 비교
+- 퀘스트 메타: [courseMeta.js](E:/프로젝트/클로드_초보_게임/tableau-survival/src/data/roles/pm/courseMeta.js)
+- 브릿지/현실 체크 지원 데이터: [questSupport.js](E:/프로젝트/클로드_초보_게임/tableau-survival/src/data/roles/pm/questSupport.js)
+- 퀘스트 문제 데이터: [questProblems.js](E:/프로젝트/클로드_초보_게임/tableau-survival/src/data/roles/pm/problems/questProblems.js)
+- 챕터 스크립트: [src/data/roles/pm/chapters](E:/프로젝트/클로드_초보_게임/tableau-survival/src/data/roles/pm/chapters)
+- 메인 플레이 페이지: [GamePlay.jsx](E:/프로젝트/클로드_초보_게임/tableau-survival/src/pages/GamePlay.jsx)
 
-### 블록 드래그 채점 (`blockDragChecker.js`)
-- 슬롯별 정답 비교: chartType, xAxis, yAxis, colorBy, sizeBy 등 9개 슬롯
-- **대안 정답 지원**: `alternativeAnswers` 배열로 복수 정답 허용
-- chartType `auto`를 `bar`로 정규화하여 Tableau 기본 동작 반영
-- 진행률 피드백: 맞춘 슬롯 수 / 전체 슬롯 수를 실시간 표시
-- **보스 리액션**: 진행률에 따라 캐릭터 표정·코멘트가 동적으로 변화
+## 배포 포지셔닝
 
-### 계산식 채점 (`calcFieldValidator.js`)
-- **정규식 패턴 매칭**: 복수 정답 패턴을 순차 검사 (IF/THEN 방식, IIF 방식 모두 허용)
-- **구문 검증**: 괄호 짝, 필드 참조 `[]` 짝, IF/CASE-END 짝 확인
-- **부분 피드백**: 조건식은 맞았지만 THEN절이 빠진 경우 등 중간 단계 피드백 제공
-- 수식 정규화: 공백·대괄호 내 공백을 통일하여 형식 차이에 무관한 채점
+현재 제품은 “Claude Code 완전 정복”보다는 아래 포지셔닝에 더 적합합니다.
 
-> **핵심 원칙**: 모든 채점이 클라이언트에서 결정적으로 동작하므로, 네트워크 상태와 무관하게 정답/오답 판정이 즉시 이루어집니다.
+- 강의 전 예습용 인터랙티브 교재
+- 워크숍 전 온보딩 자료
+- 초보자의 첫 불안을 낮추는 입문용 경험
 
----
-
-## 세이브 시스템
-
-### 하이브리드 저장 전략
-
-| 저장소 | 타이밍 | 목적 |
-|--------|--------|------|
-| localStorage | 상태 변경 즉시 | 오프라인 복원력, 네트워크 지연 무관 |
-| Supabase (JSONB) | 2초 디바운스 | 클라우드 백업, 기기 간 동기화 |
-
-### 충돌 해결
-
-로컬과 서버에 모두 세이브가 존재할 경우, `updated_at` 타임스탬프를 비교하여 **최신 데이터를 우선** 적용합니다. 새 게임 시작 시에는 `FORCE_NEW_GAME_KEY` 플래그로 기존 세이브를 명시적으로 초기화합니다.
-
-### 유저 격리
-
-- Supabase RLS(Row Level Security)로 사용자 본인의 세이브만 접근 가능
-- `game_saves` 테이블에 `user_id` UNIQUE 제약 → 유저당 1개 세이브 슬롯
-- localStorage 키에 사용자 정보를 포함하여 브라우저 내 멀티 유저 격리
-
----
-
-## 커리큘럼 구조
-
-### Part 1: 태블로 기초 (Ch.1~4)
-
-| 챕터 | 주제 | 학습 목표 |
-|------|------|----------|
-| 1 | 태블로와의 첫 만남 | 온보딩, 인터페이스 이해 |
-| 2 | 차원과 측정값 | 데이터 분류의 기본 |
-| 3 | 마크 카드와 차트 | 시각화 감각 익히기 |
-| 4 | 데이터 연결과 정리 | 실무 데이터 준비 |
-
-### Part 2: 계산의 기술 (Ch.5~9)
-
-| 챕터 | 주제 | 학습 목표 |
-|------|------|----------|
-| 5 | 계산된 필드 입문 | 수식 작성의 시작 |
-| 6 | 함수 활용 | 날짜·문자열·논리 함수 |
-| 7 | 매개변수 | 시나리오 기반 분석 |
-| 8 | 테이블 계산 | 순위와 구성비 계산 |
-| 9 | LOD 표현식 | 집계 레벨 제어 |
-
-### Part 3: 비즈니스 분석 (Ch.10~16)
-
-| 챕터 | 주제 | 학습 목표 |
-|------|------|----------|
-| 10 | KPI 대시보드 | 지표 중심 리포트 |
-| 11 | 퍼널 분석 | 전환 이탈 지점 찾기 |
-| 12 | 파레토 분석 | 핵심 항목 집중 |
-| 13 | 고객 세분화 | RFM 기반 분류 |
-| 14 | 코호트 분석 | 리텐션 구조 이해 |
-| 15 | 시계열 분석 | 추세와 예측 |
-| 16 | 분포와 이상값 | 통계적 관점 강화 |
-
-### Part 4: 실무 대시보드 (Ch.17~20)
-
-| 챕터 | 주제 | 학습 목표 |
-|------|------|----------|
-| 17 | 설계 원칙 | 대시보드 구조화 |
-| 18 | 액션과 인터랙션 | 탐색형 분석 경험 |
-| 19 | 스토리텔링 | 인사이트 전달력 |
-| 20 | 최종 프로젝트 | 종합 대시보드 완성 |
-
----
-
-## 기술 스택
-
-| 레이어 | 기술 | 선택 근거 |
-|--------|------|----------|
-| Frontend | React 19, Vite 7, Tailwind CSS 4 | SPA 기반 즉각적 상호작용 |
-| 코드 에디터 | CodeMirror 6 + Lezer | Tableau 계산식 구문 강조 |
-| 차트 시각화 | Recharts | 블록 드래그 문제의 실시간 차트 프리뷰 |
-| 드래그 앤 드롭 | @dnd-kit | 블록 드래그 문제의 차트 구성 인터랙션 |
-| 인증 | Supabase Auth | 이메일/비밀번호 인증 |
-| 데이터베이스 | Supabase PostgreSQL | RLS 기반 유저별 세이브 격리 |
-| 배포 | Vercel | SPA 호스팅 + SPA 라우팅 리라이트 |
-
----
-
-## 데이터베이스 스키마
-
-### game_saves
-유저별 게임 상태 전체를 JSONB로 저장합니다.
-
-| 컬럼 | 타입 | 설명 |
-|------|------|------|
-| id | uuid | PK |
-| user_id | uuid | FK → auth.users, UNIQUE |
-| save_data | jsonb | 게임 상태 전체 (XP, 레벨, 호감도, 풀이 기록 등) |
-| updated_at | timestamptz | 마지막 저장 시각 (충돌 해결 기준) |
-| created_at | timestamptz | 최초 생성 시각 |
-
-- RLS 적용: SELECT / INSERT / UPDATE / DELETE 모두 `auth.uid() = user_id` 조건
-- 인덱스: `user_id`
-
-> **JSONB 단일 도큐먼트 설계 이유**: 게임 상태(50+ 필드)가 항상 함께 읽히고 쓰이므로, 정규화된 테이블 여러 개보다 단일 JSONB 컬럼이 읽기/쓰기 모두 효율적입니다. 상태 전체를 원자적으로 저장하여 부분 업데이트로 인한 불일치를 방지합니다.
-
----
-
-## 프로젝트 구조
-
-```
-tableau-survival/
-├── src/
-│   ├── components/
-│   │   ├── auth/
-│   │   │   └── LoginPage.jsx              # 로그인 UI
-│   │   ├── common/
-│   │   │   ├── GameStart.jsx              # 타이틀 + 로드/뉴게임
-│   │   │   ├── GameOver.jsx               # 게임 오버
-│   │   │   ├── GameComplete.jsx           # 20챕터 완료 엔딩
-│   │   │   ├── CharacterSetup.jsx         # 이름/성별 설정
-│   │   │   ├── TitleCollectionModal.jsx   # 칭호 도감
-│   │   │   ├── CGViewer.jsx               # CG 일러스트 뷰어
-│   │   │   └── TransitionScene.jsx        # 챕터 전환 연출
-│   │   ├── chapter/
-│   │   │   ├── ChapterFlow.jsx            # 챕터 진행 오케스트레이터
-│   │   │   ├── ChapterSelect.jsx          # 챕터 선택 UI
-│   │   │   ├── ChapterClear.jsx           # 챕터 결과 화면
-│   │   │   └── BuffSelect.jsx             # 이벤트 루트 선택
-│   │   ├── questions/
-│   │   │   ├── QuestionRouter.jsx         # 문제 유형별 라우팅
-│   │   │   ├── QuizQuestion.jsx           # 선택형 퀴즈
-│   │   │   ├── BlockDragQuestion.jsx      # 차트 빌더
-│   │   │   └── CalcFieldQuestion.jsx      # 계산식 에디터
-│   │   ├── blocks/
-│   │   │   ├── BlockWorkspace.jsx         # 드래그 앤 드롭 + 차트 프리뷰
-│   │   │   ├── BlockPalette.jsx           # 사용 가능한 블록 목록
-│   │   │   ├── DraggableBlock.jsx         # 드래그 가능한 필 UI
-│   │   │   ├── DroppableSlot.jsx          # 드롭 대상 슬롯
-│   │   │   └── ChartPreview.jsx           # 실시간 차트 렌더링
-│   │   ├── calcfield/
-│   │   │   ├── CalcFieldEditor.jsx        # CodeMirror 계산식 에디터
-│   │   │   ├── FieldReference.jsx         # 사용 가능 필드 참조
-│   │   │   └── FunctionReference.jsx      # 사용 가능 함수 참조
-│   │   └── novel/
-│   │       ├── VNScene.jsx                # 비주얼 노벨 씬 엔진
-│   │       ├── DialogueBox.jsx            # 대사 표시 UI
-│   │       └── CharacterSprite.jsx        # 캐릭터 스프라이트 + 표정
-│   ├── data/
-│   │   ├── chapters/                      # 20챕터 스크립트
-│   │   ├── problems/
-│   │   │   ├── quizProblems.js            # 퀴즈 30문제
-│   │   │   ├── blockDragProblems.js       # 블록 드래그 13문제
-│   │   │   └── calcFieldProblems.js       # 계산식 18문제
-│   │   ├── titles.js                      # 25종 칭호 정의
-│   │   ├── characters.js                  # 캐릭터 + 표정 데이터
-│   │   └── tableauFunctions.js            # 함수 레퍼런스 데이터
-│   ├── hooks/
-│   │   ├── useGameState.jsx               # 게임 상태 (Context + Reducer)
-│   │   └── useAuth.jsx                    # Supabase 인증
-│   ├── utils/
-│   │   ├── quizChecker.js                 # 퀴즈 채점
-│   │   ├── blockDragChecker.js            # 블록 드래그 채점
-│   │   ├── calcFieldValidator.js          # 계산식 채점 + 부분 피드백
-│   │   └── chartRenderer.js               # 차트 렌더링 유틸
-│   ├── lib/
-│   │   └── supabase.js                    # Supabase 클라이언트
-│   └── pages/
-│       └── GamePlay.jsx                   # 메인 게임 페이지
-├── public/images/
-│   ├── backgrounds/                       # 스토리 배경 (9종)
-│   ├── characters/                        # 캐릭터 스프라이트 (표정별)
-│   └── CG/                               # CG 일러스트
-├── supabase/migrations/
-│   └── 001_game_saves.sql                 # DB 스키마 + RLS
-└── vercel.json                            # 배포 설정
-```
-
----
-
-## 콘텐츠 규모
-
-| 항목 | 수량 |
-|------|------|
-| 챕터 | 20개 (4파트) |
-| 퀴즈 문제 | 30개 |
-| 블록 드래그 문제 | 13개 |
-| 계산식 문제 | 18개 |
-| 전체 문제 | 61개 |
-| 수집 칭호 | 25종 (히든 5종 포함) |
-| 캐릭터 | 3명 (표정 7종+) |
-| CG 일러스트 | 4점+ |
-| 스토리 배경 | 9종 |
+즉, 단독 완결형 고급 코스보다는 `초보자 프라이머`에 가깝습니다.

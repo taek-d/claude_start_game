@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getRoleCharacters } from '../../data/roleRegistry'
 import { soundFx } from '../../utils/feedback'
 
@@ -12,25 +12,26 @@ export default function DialogueBox({ speaker, text, onAdvance, playerName }) {
   useEffect(() => {
     setDisplayedText('')
     setIsTyping(true)
-    let i = 0
+    let index = 0
     intervalRef.current = setInterval(() => {
-      i++
-      if (i <= fullText.length) {
-        setDisplayedText(fullText.slice(0, i))
-        if (i % 2 === 0) soundFx.type()
+      index += 1
+      if (index <= fullText.length) {
+        setDisplayedText(fullText.slice(0, index))
+        if (index % 2 === 0) soundFx.type()
       } else {
         setIsTyping(false)
         clearInterval(intervalRef.current)
         intervalRef.current = null
       }
     }, 25)
+
     return () => {
       clearInterval(intervalRef.current)
       intervalRef.current = null
     }
   }, [fullText])
 
-  const handleClick = useCallback(() => {
+  const handleAdvance = useCallback(() => {
     soundFx.click()
     if (isTyping) {
       clearInterval(intervalRef.current)
@@ -40,32 +41,28 @@ export default function DialogueBox({ speaker, text, onAdvance, playerName }) {
       return
     }
     onAdvance()
-  }, [isTyping, fullText, onAdvance])
+  }, [fullText, isTyping, onAdvance])
 
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === ' ' || e.key === 'Enter') {
-        e.preventDefault()
-        handleClick()
+    const onKeyDown = (event) => {
+      if (event.key === ' ' || event.key === 'Enter') {
+        event.preventDefault()
+        handleAdvance()
       }
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleClick])
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [handleAdvance])
 
   const isNarrator = speaker === 'narrator'
   const isPlayer = speaker === 'player'
-  const CHARACTERS = getRoleCharacters()
-  const character = CHARACTERS[speaker]
-  const speakerName = isNarrator
-    ? ''
-    : isPlayer
-      ? playerName
-      : character?.name || speaker
-  const nameColor = isPlayer ? '#a78bfa' : character?.nameColor || '#5b8df0'
+  const characters = getRoleCharacters()
+  const character = characters[speaker]
+  const speakerName = isNarrator ? '' : isPlayer ? playerName : character?.name || speaker
+  const nameColor = isPlayer ? '#c59cff' : character?.nameColor || '#6fb1ff'
 
   return (
-    <div className="vn-dialogue-container" onClick={handleClick}>
+    <div className="vn-dialogue-container" onClick={handleAdvance}>
       <div className="vn-dialogue-box">
         {speakerName && (
           <div className="vn-speaker-name" style={{ color: nameColor }}>
@@ -77,7 +74,7 @@ export default function DialogueBox({ speaker, text, onAdvance, playerName }) {
           {isTyping && <span className="vn-cursor" />}
         </div>
         <div className="vn-dialogue-hint">
-          {isTyping ? '' : '▸'}
+          {isTyping ? '' : 'Enter 또는 클릭'}
         </div>
       </div>
     </div>

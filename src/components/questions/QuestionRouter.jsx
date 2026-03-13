@@ -1,10 +1,9 @@
 import { getProblemById } from '../../data/roleRegistry'
 import { useGameState } from '../../hooks/useGameState'
-import QuizQuestion from './QuizQuestion'
-import BlockDragQuestion from './BlockDragQuestion'
-import CalcFieldQuestion from './CalcFieldQuestion'
-import TextInputQuestion from './TextInputQuestion'
-import RoadmapQuestion from './RoadmapQuestion'
+import CardSortQuestion from './CardSortQuestion'
+import PromptBuildQuestion from './PromptBuildQuestion'
+import QuickChoiceQuestion from './QuickChoiceQuestion'
+import WorkflowSimQuestion from './WorkflowSimQuestion'
 
 export default function QuestionRouter({ problemId, onComplete }) {
   const state = useGameState()
@@ -13,12 +12,9 @@ export default function QuestionRouter({ problemId, onComplete }) {
 
   if (!problem) {
     return (
-      <div className="bg-bg-secondary rounded-xl p-8 text-center">
-        <p className="text-text-secondary">문제를 찾을 수 없습니다: {problemId}</p>
-        <button
-          onClick={() => onComplete(true)}
-          className="mt-4 px-6 py-2 bg-accent rounded-lg text-white cursor-pointer"
-        >
+      <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-8 text-center text-white/75">
+        <p>문제를 찾을 수 없어요: {problemId}</p>
+        <button onClick={() => onComplete(true)} className="mt-4 rounded-full bg-cyan-400 px-5 py-2.5 font-bold text-slate-950">
           건너뛰기
         </button>
       </div>
@@ -26,16 +22,14 @@ export default function QuestionRouter({ problemId, onComplete }) {
   }
 
   switch (problem.type) {
-    case 'quiz':
-      return <QuizQuestion problem={problem} onComplete={onComplete} />
-    case 'block_drag':
-      return <BlockDragQuestion problem={problem} onComplete={onComplete} />
-    case 'calc_field':
-      return <CalcFieldQuestion problem={problem} onComplete={onComplete} />
-    case 'text_input':
-      return <TextInputQuestion problem={problem} onComplete={onComplete} />
-    case 'roadmap':
-      return <RoadmapQuestion problem={problem} onComplete={onComplete} />
+    case 'quick_choice':
+      return <QuickChoiceQuestion problem={problem} onComplete={onComplete} />
+    case 'prompt_build':
+      return <PromptBuildQuestion problem={problem} onComplete={onComplete} />
+    case 'workflow_sim':
+      return <WorkflowSimQuestion problem={problem} onComplete={onComplete} />
+    case 'card_sort':
+      return <CardSortQuestion problem={problem} onComplete={onComplete} />
     default:
       return null
   }
